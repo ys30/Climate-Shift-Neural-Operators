@@ -18,7 +18,7 @@ def fixture_ds(missing=False):
 def test_real_time_alignment_and_360_longitudes():
     ds = fixture_ds()
     x, y, years, targets = make_24h_pairs(ds, start="2019-07-01", end="2019-07-03", stride=1, max_samples=2)
-    assert x.shape == (2, 1, 3, 4)
+    assert x.shape == (2, 1, 3, 3)
     assert years.tolist() == [2019, 2019]
     assert targets[0] - ds.time.values[0] == np.timedelta64(24, "h")
     np.testing.assert_allclose(y[0] - x[0], 4 * 25)

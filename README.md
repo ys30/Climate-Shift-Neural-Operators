@@ -51,3 +51,15 @@ This project is independent of [Western-US-Weather-JAX](https://github.com/ys30/
 - [ ] CMIP6 future-climate experiments
 - [ ] Statistical and physical diagnostics
 - [ ] Manuscript and archival release
+
+## E1 v0.3: executable synthetic smoke test
+
+A small PyTorch 2-D FNO baseline, strict NPZ input contract, chronology checks, and CPU smoke test have been added. **No ERA5, CMIP6, or model-performance finding is claimed.** The prototype FNO is not SFNO and does not yet use climate-state conditioning.
+
+```bash
+python -m pip install -e '.[test,torch]'
+python -m pytest
+python scripts/synthetic_smoke.py --steps 10
+```
+
+Synthetic targets are local averages of fabricated sinusoidal fields; smoke metrics only confirm the code executes and are not evidence for climate generalization. See [E1 data contract](docs/E1_DATA_CONTRACT.md) and [synthetic smoke CI](.github/workflows/synthetic-smoke.yml). The production data adapter, U-Net/transformer baselines, area-weighted metrics, full train/validation/test pipeline, and independent CMIP6 experiments are not yet implemented.

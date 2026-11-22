@@ -1,0 +1,9 @@
+# Remote climate data and locally generated outputs must not be committed
+data/
+*.zarr/
+outputs/
+runs/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.venv/

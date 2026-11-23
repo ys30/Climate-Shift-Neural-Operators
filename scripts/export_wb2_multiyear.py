@@ -10,8 +10,8 @@ import hashlib
 import json
 from pathlib import Path
 import numpy as np
-import xarray as xr
 from climate_shift.era5_adapter import make_24h_pairs
+from climate_shift.wb2_source import open_public_wb2
 from climate_shift.data import load_npz_pairs
 DEFAULT_STORE = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
 
@@ -63,7 +63,7 @@ def main():
     out = Path(args.output)
     if out.exists() or out.with_suffix(".json").exists():
         p.error("Refusing to overwrite an existing dataset or metadata")
-    ds = xr.open_zarr(args.store, consolidated=True, chunks=None)
+    ds = open_public_wb2(args.store)
     try:
         x, y, years, times, skipped = extract(ds, args.years, args.max_per_month, args.stride)
         out.parent.mkdir(parents=True, exist_ok=True)

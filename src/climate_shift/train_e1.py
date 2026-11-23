@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch import nn
 from .data import chronological_masks, load_npz_pairs
+from .split_isolation import audit_split_isolation
 from .metrics import regression_metrics
 from .models import FNO2d
 
@@ -23,6 +24,7 @@ def run(npz: str | Path, train_end: int, val_end: int, test_end: int,
     x, y, years = load_npz_pairs(npz)
     train_mask, val_mask, test_mask = chronological_masks(
         years, train_end, val_end, test_end, embargo_years)
+    split_audit = audit_split_isolation(npz, (train_mask, val_mask, test_mask))
     if x.shape[1] != y.shape[1] or x.shape[1] != 1:
         raise ValueError("Restricted to same-variable, single-channel prediction")
     if x.shape[2] < 2 * modes or x.shape[3] // 2 + 1 < modes:
@@ -66,6 +68,7 @@ def run(npz: str | Path, train_end: int, val_end: int, test_end: int,
                           "test_end": test_end, "embargo_years": embargo_years,
                           "epochs": epochs, "seed": seed, "width": width,
                           "modes": modes, "batch_size": batch_size, "lr": lr},
+        "split_isolation": split_audit,
         "sample_counts": {"train": int(train_mask.sum()),
                           "validation": int(val_mask.sum()), "test": int(test_mask.sum())},
         "normalization": {"target_mean_train_only": center,

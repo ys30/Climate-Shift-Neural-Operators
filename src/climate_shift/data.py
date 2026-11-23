@@ -10,10 +10,15 @@ def load_npz_pairs(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray
     target timestamps; upstream must prove predictor/target time alignment.
     """
     with np.load(path, allow_pickle=False) as data:
-        if set(data.files) not in ({"X", "y", "years"}, {"X", "y", "years", "target_times"}):
-            raise ValueError("NPZ must contain X, y, years and optional target_times")
+        allowed = {"X", "y", "years", "target_times", "source_times"}
+        keys = set(data.files)
+        if not {"X", "y", "years"} <= keys or keys - allowed:
+            raise ValueError("NPZ must contain X, y, years and optional time arrays")
+        if "source_times" in keys and "target_times" not in keys:
+            raise ValueError("source_times require target_times")
         x, y, years = data["X"], data["y"], data["years"]
         target_times = data["target_times"] if "target_times" in data.files else None
+        source_times = data["source_times"] if "source_times" in data.files else None
     if x.ndim != 4 or y.ndim != 4 or x.shape[0] != y.shape[0] or x.shape[2:] != y.shape[2:]:
         raise ValueError("Expected matched [N,C,H,W] grid arrays")
     if len(years) != len(x) or years.ndim != 1 or years.dtype.kind not in 'iu':
@@ -27,6 +32,15 @@ def load_npz_pairs(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray
         computed_years = target_times.astype("datetime64[Y]").astype(int) + 1970
         if not np.array_equal(computed_years, years):
             raise ValueError("target_times and years disagree")
+    if source_times is not None:
+        if (source_times.shape != (len(years),) or
+                source_times.dtype.kind != "M" or np.isnat(source_times).any()):
+            raise ValueError("source_times must be valid datetime64 vector")
+        if not np.all(target_times.astype("datetime64[ns]") -
+                      source_times.astype("datetime64[ns]") == np.timedelta64(24, "h")):
+            raise ValueError("Every source-target pair must have an exact +24h lead")
+        if len(source_times) > 1 and not np.all(np.diff(source_times) > np.timedelta64(0, "ns")):
+            raise ValueError("source_times must be unique and strictly increasing")
     if not np.isfinite(x).all() or not np.isfinite(y).all():
         raise ValueError("NaN/Inf found; decide missing-data treatment upstream")
     return x.astype(np.float32), y.astype(np.float32), years.astype(int)

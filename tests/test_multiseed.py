@@ -17,3 +17,22 @@ def test_multiseed(tmp_path):
     with pytest.raises(ValueError):
         run_seeds(path, tmp_path / "dup", 2000, 2001, 2002,
                   seeds=(1, 1), epochs=1, width=4, modes=2)
+
+
+def test_multiseed_strict_time_provenance(tmp_path):
+    rng = np.random.default_rng(20)
+    dates = np.array(["2000-02-02T00", "2000-02-04T00",
+                      "2001-02-02T00", "2001-02-04T00",
+                      "2002-02-02T00", "2002-02-04T00"], dtype="datetime64[ns]")
+    origins = dates - np.timedelta64(24, "h")
+    x = rng.normal(280, 4, size=(6, 1, 8, 8)).astype("float32")
+    y = x + rng.normal(0, 1, size=x.shape).astype("float32")
+    path = tmp_path / "dated.npz"
+    np.savez_compressed(path, X=x, y=y,
+                        years=np.repeat([2000, 2001, 2002], 2),
+                        source_times=origins, target_times=dates)
+    summary = run_seeds(path, tmp_path / "out", 2000, 2001, 2002,
+                        seeds=(11, 22), epochs=1, width=4, modes=2,
+                        require_pair_times=True)
+    assert summary["split_isolation"]["status"] == "passed"
+    assert len(summary["models"]["fno"]["heat_recall"]["individual"]) == 2

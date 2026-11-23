@@ -37,7 +37,7 @@ jobs:
             --input data/processed/e1_contiguous_dev.npz \
             --train-end 2010 --val-end 2011 --test-end 2012 \
             --epochs 5 --batch-size 8 --seed 2026 \
-            --width 8 --modes 4 \
+            --width 8 --modes 4 --require-pair-times \
             --output outputs/e1_contiguous_dev_metrics.json
       - name: Upload only metadata and metrics; not ERA5 arrays
         if: always()

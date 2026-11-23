@@ -67,7 +67,7 @@ def main():
     try:
         x, y, years, times, skipped = extract(ds, args.years, args.max_per_month, args.stride)
         out.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(out, X=x, y=y, years=years)
+        np.savez_compressed(out, X=x, y=y, years=years, target_times=times)
         # Verify output round-trip and fail on schema corruption.
         check_x, check_y, check_years = load_npz_pairs(out)
         if check_x.shape != x.shape or check_y.shape != y.shape or not np.array_equal(check_years, years):

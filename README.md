@@ -78,3 +78,20 @@ python scripts/train_e1.py --input data/processed/multi_year_pairs.npz \
 ```
 
 **Do not use the single-week 2019 adapter output for training:** a short single-year extraction is insufficient for all three held-out chronological partitions. Multi-year extraction and scientific partition freeze are still outstanding. No ERA5 performance numbers or climate-change conclusions have been produced.
+
+## E1 v0.6 — bounded multi-year extraction and exploratory three-way model comparison
+
+New components:
+- [Monthly-stratified multi-year WeatherBench 2 exporter](scripts/export_wb2_multiyear.py)
+- [Compact U-Net](src/climate_shift/unet.py)
+- [FNO / U-Net / persistence comparison](src/climate_shift/compare_e1.py)
+- [Reproduction and methodological caveats](docs/E1_V06_RUNBOOK.md)
+
+```bash
+python -m pip install -e '.[test,torch,era5]'
+python -m pytest
+python scripts/export_wb2_multiyear.py --years 2010 2015 2020 --max-per-month 8 --stride 4 --output data/processed/e1_multiyear_dev.npz
+python scripts/compare_e1.py --input data/processed/e1_multiyear_dev.npz --train-end 2010 --val-end 2015 --test-end 2020 --epochs 4 --width 8 --modes 4 --output outputs/e1_v06_dev.json
+```
+
+The three years and 8 samples/month are *development examples*, not a preregistered climate study. This pipeline operates on a bounded in-memory NPZ, not streaming storage. ERA5 cloud access and CI success have not yet been confirmed. **Do not publish synthetic or tiny-extract model comparisons as research findings.**

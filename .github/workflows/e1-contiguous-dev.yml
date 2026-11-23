@@ -1,0 +1,52 @@
+name: E1 contiguous-year development benchmark (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contiguous-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install tested dependencies
+        run: python -m pip install -e '.[test,torch,era5]'
+      - name: Unit tests
+        run: python -m pytest
+      - name: Download bounded contiguous-year ERA5 samples
+        run: |
+          python scripts/export_wb2_multiyear.py \
+            --years 2008 2009 2010 2011 2012 \
+            --max-per-month 24 --stride 4 \
+            --output data/processed/e1_contiguous_dev.npz
+      - name: Structural provenance audit
+        run: |
+          python scripts/audit_e1.py \
+            --input data/processed/e1_contiguous_dev.npz \
+            --metadata data/processed/e1_contiguous_dev.json \
+            --output outputs/e1_contiguous_dev_audit.json
+      - name: Evaluate three models with validation checkpoint
+        run: |
+          python scripts/compare_e1.py \
+            --input data/processed/e1_contiguous_dev.npz \
+            --train-end 2010 --val-end 2011 --test-end 2012 \
+            --epochs 5 --batch-size 8 --seed 2026 \
+            --width 8 --modes 4 \
+            --output outputs/e1_contiguous_dev_metrics.json
+      - name: Upload only metadata and metrics; not ERA5 arrays
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-contiguous-dev-diagnostics
+          path: |
+            data/processed/e1_contiguous_dev.json
+            outputs/e1_contiguous_dev_audit.json
+            outputs/e1_contiguous_dev_metrics.json
+          retention-days: 14
+          if-no-files-found: warn

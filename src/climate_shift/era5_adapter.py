@@ -13,7 +13,7 @@ def make_24h_pairs(ds: xr.Dataset, variable: str = "2m_temperature",
                    lat_bounds: tuple[float, float] = (25.0, 50.0),
                    lon_bounds: tuple[float, float] = (-125.0, -100.0),
                    stride: int = 4, max_samples: int = 256,
-                   selection: str = "first"):
+                   selection: str = "first", return_source_times: bool = False):
     """Return X/y/target years and target timestamps for exact +24h pairs.
 
     Assumes a time/latitude/longitude field without extra dimensions.
@@ -76,4 +76,7 @@ def make_24h_pairs(ds: xr.Dataset, variable: str = "2m_temperature",
         raise ValueError("Non-finite samples; decide policy before export")
     target_times = times[y_indices].astype("datetime64[ns]")
     years = target_times.astype("datetime64[Y]").astype(int) + 1970
+    source_times = times[x_indices].astype("datetime64[ns]")
+    if return_source_times:
+        return x[:, None], y[:, None], years.astype("int32"), target_times, source_times
     return x[:, None], y[:, None], years.astype("int32"), target_times

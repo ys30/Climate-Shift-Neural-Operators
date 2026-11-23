@@ -19,7 +19,7 @@ Legacy `X,y,years` NPZ files remain loadable for historical reproducibility; old
 
 ### Scientific caveat
 
-The 24-hour pair check ensures only the timestamp separation, not freedom from all leakage. In addition to chronological year splits, downstream training must prevent normalization, hyperparameter selection, seasonal climatology, target-derived covariates, and spatial overlap from leaking information across partitions. A future full-corpus adapter should validate that raw source coordinates correspond to recorded origins, not merely derive origins from target timestamps.
+The 24-hour pair check ensures only the timestamp separation, not freedom from all leakage. In addition to chronological year splits, downstream training must prevent normalization, hyperparameter selection, seasonal climatology, target-derived covariates, and spatial overlap from leaking information across partitions. The current adapter now records observed ERA5 input coordinates rather than deriving origins from target times; the new unit test checks both source and target timestamps exist in the input dataset. A full-corpus audit must still verify raw source version and spatial/temporal metadata independently.
 
 ### Running checks
 

@@ -15,13 +15,13 @@ from climate_shift.wb2_source import open_public_wb2
 from climate_shift.data import load_npz_pairs
 DEFAULT_STORE = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
 
-def extract(ds, years, max_per_month=8, stride=4):
+def extract(ds, years, max_per_month=8, stride=4, include_source_times=False):
     if max_per_month < 1 or stride < 1:
         raise ValueError("max_per_month and stride must be positive")
     years = [int(year) for year in years]
     if len(set(years)) != len(years) or years != sorted(years):
         raise ValueError("Years must be unique and in increasing order")
-    x_all, y_all, yrs_all, times_all = [], [], [], []
+    x_all, y_all, yrs_all, times_all, sources_all = [], [], [], [], []
     skipped = []
     for year in years:
         for month in range(1, 13):
@@ -29,9 +29,9 @@ def extract(ds, years, max_per_month=8, stride=4):
             stop = date(year + (month == 12), (month % 12) + 1, 1)
             end = date.fromordinal(stop.toordinal() - 1)
             try:
-                x, y, yy, stamps = make_24h_pairs(
+                x, y, yy, stamps, origins = make_24h_pairs(
                     ds, start=start.isoformat(), end=end.isoformat(),
-                    stride=stride, max_samples=max_per_month, selection="uniform")
+                    stride=stride, max_samples=max_per_month, selection="uniform",\n                    return_source_times=True)
             except ValueError as exc:
                 # Only skip months genuinely outside the published data window.
                 if "No timestamps inside requested date window" not in str(exc) or "No exact 24-hour pairs" in str(exc):
@@ -43,14 +43,17 @@ def extract(ds, years, max_per_month=8, stride=4):
             x_all.append(x)
             y_all.append(y)
             yrs_all.append(yy)
-            times_all.append(stamps)
+            times_all.append(stamps)\n            sources_all.append(origins)
     if not x_all:
         raise ValueError("No samples across requested years")
     target_times = np.concatenate(times_all)
     if len(np.unique(target_times)) != len(target_times) or not np.all(target_times[1:] > target_times[:-1]):
         raise ValueError("Targets duplicated or not chronologically ordered")
-    return (np.concatenate(x_all), np.concatenate(y_all),
-            np.concatenate(yrs_all), target_times, skipped)
+    result = (np.concatenate(x_all), np.concatenate(y_all),
+              np.concatenate(yrs_all), target_times, skipped)
+    if include_source_times:
+        return (*result, np.concatenate(sources_all))
+    return result
 
 def main():
     p = argparse.ArgumentParser()
@@ -65,9 +68,9 @@ def main():
         p.error("Refusing to overwrite an existing dataset or metadata")
     ds = open_public_wb2(args.store)
     try:
-        x, y, years, times, skipped = extract(ds, args.years, args.max_per_month, args.stride)
+        x, y, years, times, skipped, sources = extract(\n            ds, args.years, args.max_per_month, args.stride, include_source_times=True)
         out.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(out, X=x, y=y, years=years, target_times=times,\n                            source_times=times - np.timedelta64(24, "h"))
+        np.savez_compressed(out, X=x, y=y, years=years, target_times=times,\n                            source_times=sources)
         # Verify output round-trip and fail on schema corruption.
         check_x, check_y, check_years = load_npz_pairs(out)
         if check_x.shape != x.shape or check_y.shape != y.shape or not np.array_equal(check_years, years):

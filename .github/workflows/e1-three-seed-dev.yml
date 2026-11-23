@@ -1,0 +1,56 @@
+name: E1 ERA5 three-seed replication (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  three-seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fast syntax check
+        run: python -m compileall -q src scripts tests
+      - name: Install dependencies
+        run: python -m pip install -e '.[test,torch,era5]'
+      - name: Unit tests
+        run: python -m pytest
+      - name: Extract deterministic real-data 2008–2012 cohort
+        run: |
+          python scripts/export_wb2_multiyear.py \
+            --years 2008 2009 2010 2011 2012 \
+            --max-per-month 24 --stride 4 \
+            --output data/processed/e1_contiguous_dev.npz
+      - name: Verify data source, month coverage and exact timestamp pairs
+        run: |
+          python scripts/check_e1_coverage.py \
+            --input data/processed/e1_contiguous_dev.npz \
+            --metadata data/processed/e1_contiguous_dev.json \
+            --years 2008 2009 2010 2011 2012 \
+            --min-per-month 20 \
+            --output outputs/e1_three_seed_coverage.json
+      - name: Compare FNO, U-Net and persistence across 3 seeds
+        run: |
+          python scripts/run_e1_multiseed.py \
+            --input data/processed/e1_contiguous_dev.npz \
+            --output-dir outputs/e1_three_seeds \
+            --train-end 2010 --val-end 2011 --test-end 2012 \
+            --seeds 11 22 33 --epochs 5 --width 8 --modes 4 \
+            --require-pair-times
+      - name: Archive non-data diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-era5-three-seed-replication
+          path: |
+            data/processed/e1_contiguous_dev.json
+            outputs/e1_three_seed_coverage.json
+            outputs/e1_three_seeds/*.json
+          if-no-files-found: warn
+          retention-days: 14

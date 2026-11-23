@@ -109,3 +109,17 @@ python scripts/run_e1_multiseed.py --input data/processed/e1_multiyear_dev.npz \
 ```
 
 **Research status:** Development code, not climate-science findings. The current global percentile threshold is not a multi-day heatwave definition. The v0.7 comparison has no latitude coordinates for area weighting; real ERA5 extraction, future climate data, blocked uncertainty and full CI verification remain outstanding.
+
+## E1 v0.8 — auditable timestamps and source manifests
+
+New development exports persist `target_times` alongside `X`, `y`, `years`. Existing training utilities remain backward compatible, but timestamps in new files are checked for strict ordering and consistency with target years.
+
+[Independent audit tool](src/climate_shift/audit_e1.py) and [tests](tests/test_audit_e1.py) check timestamps, source metadata, month/year counts, and SHA-256. Run:
+
+```bash
+python scripts/audit_e1.py --input data/processed/e1_multiyear_dev.npz \
+  --metadata data/processed/e1_multiyear_dev.json \
+  --output outputs/e1_v08_audit.json
+```
+
+See [v0.8 audit protocol](docs/E1_V08_DATA_AUDIT.md). Public source documentation is confirmed, but **remote dataset extraction and real ERA5 numerical results remain unverified**. Current tests use fabricated fields. This audit does not prove correct predictor-target pairing; the adapter and raw source metadata require separate checks.

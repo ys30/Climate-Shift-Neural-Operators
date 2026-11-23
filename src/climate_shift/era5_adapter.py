@@ -12,7 +12,8 @@ def make_24h_pairs(ds: xr.Dataset, variable: str = "2m_temperature",
                    start: str = "2019-01-01", end: str = "2019-01-31",
                    lat_bounds: tuple[float, float] = (25.0, 50.0),
                    lon_bounds: tuple[float, float] = (-125.0, -100.0),
-                   stride: int = 4, max_samples: int = 256):
+                   stride: int = 4, max_samples: int = 256,
+                   selection: str = "first"):
     """Return X/y/target years and target timestamps for exact +24h pairs.
 
     Assumes a time/latitude/longitude field without extra dimensions.
@@ -24,6 +25,8 @@ def make_24h_pairs(ds: xr.Dataset, variable: str = "2m_temperature",
         raise KeyError(f"Missing variable {variable!r}")
     if stride < 1 or max_samples < 1:
         raise ValueError("stride and max_samples must be positive")
+    if selection not in ("first", "uniform"):
+        raise ValueError("selection must be first or uniform")
     if not (lat_bounds[0] < lat_bounds[1] and lon_bounds[0] < lon_bounds[1]):
         raise ValueError("Bounds must be increasing and must not cross the dateline")
     da = ds[variable]
@@ -56,8 +59,12 @@ def make_24h_pairs(ds: xr.Dataset, variable: str = "2m_temperature",
         j = lookup.get(future)
         if j is not None and times[j] < end_dt:
             pairs.append((int(i), int(j)))
-        if len(pairs) >= max_samples:
+        if selection == "first" and len(pairs) >= max_samples:
             break
+    if selection == "uniform" and len(pairs) > max_samples:
+        # Spread samples over the entire month rather than selecting only early days.
+        chosen = np.linspace(0, len(pairs) - 1, max_samples, dtype=int)
+        pairs = [pairs[int(idx)] for idx in chosen]
     if not pairs:
         raise ValueError("No exact 24-hour pairs inside date window")
     x_indices = [i for i, _ in pairs]

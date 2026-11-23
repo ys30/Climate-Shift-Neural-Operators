@@ -123,3 +123,9 @@ python scripts/audit_e1.py --input data/processed/e1_multiyear_dev.npz \
 ```
 
 See [v0.8 audit protocol](docs/E1_V08_DATA_AUDIT.md). Public source documentation is confirmed, but **remote dataset extraction and real ERA5 numerical results remain unverified**. Current tests use fabricated fields. This audit does not prove correct predictor-target pairing; the adapter and raw source metadata require separate checks.
+
+## E1 v0.9 — real-data connectivity gate
+
+A bounded [WeatherBench 2 access probe](scripts/probe_wb2_access.py) and [GitHub Actions workflow](.github/workflows/wb2-access-probe.yml) now test anonymous Google Cloud access, verify the variable/time schema, and attempt an actual tiny temperature chunk read. A JSON diagnostic is uploaded even when the action fails. Both the single-week and multi-year exporters now use the shared [anonymous GCS reader](src/climate_shift/wb2_source.py).
+
+**Important:** The existence of this workflow is not evidence that it succeeded; inspect the specific Actions run and `wb2-access-probe` artifact. See [v0.9 data-access gate](docs/E1_V09_REMOTE_DATA_GATE.md). Full-year ERA5 training and OOD evidence remain pending.

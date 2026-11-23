@@ -95,3 +95,17 @@ python scripts/compare_e1.py --input data/processed/e1_multiyear_dev.npz --train
 ```
 
 The three years and 8 samples/month are *development examples*, not a preregistered climate study. This pipeline operates on a bounded in-memory NPZ, not streaming storage. ERA5 cloud access and CI success have not yet been confirmed. **Do not publish synthetic or tiny-extract model comparisons as research findings.**
+
+## E1 v0.7 — extreme-grid diagnostics and independent seeds
+
+The [heat diagnostics module](src/climate_shift/extremes.py) fits a threshold from the training target distribution only and measures exceedance frequency bias, conditional hot-temperature bias, recall, and precision for FNO, U-Net, and persistence. Undefined cases are JSON `null`. The [multi-seed runner](scripts/run_e1_multiseed.py) produces separate seed reports and a descriptive summary. See [v0.7 protocol](docs/E1_V07_EXTREMES_PROTOCOL.md).
+
+```bash
+python -m pip install -e '.[test,torch,era5]'
+python -m pytest
+python scripts/run_e1_multiseed.py --input data/processed/e1_multiyear_dev.npz \
+  --output-dir outputs/e1_v07_multiseed --train-end 2010 --val-end 2015 --test-end 2020 \
+  --seeds 11 22 33 --epochs 4 --width 8 --modes 4
+```
+
+**Research status:** Development code, not climate-science findings. The current global percentile threshold is not a multi-day heatwave definition. The v0.7 comparison has no latitude coordinates for area weighting; real ERA5 extraction, future climate data, blocked uncertainty and full CI verification remain outstanding.

@@ -143,3 +143,9 @@ The [bounded real-data CI pilot](.github/workflows/e1-realdata-pilot.yml) now ru
 The [real ERA5 integration workflow](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45109019800) completed **successfully** (data extraction, timestamp audit and three-model calculation on actual observations/reanalysis). See [audited v1.0 numerical results](docs/E1_V10_ACTUAL_ERA5_PILOT_RESULTS.md): 72 17×17 samples from 2010/2015/2020; only two training epochs. Persistence outperformed insufficiently trained neural models in this tiny test, which is **not evidence of climate-shift generalization or architectural quality**.
 
 The next [contiguous-year development workflow](.github/workflows/e1-contiguous-dev.yml) is **manual-only** to control GitHub Actions compute costs. It proposes 2008–2010 training, 2011 validation and 2012 test, up to 24 daily source times per month, five epochs, a strict 18-minute workflow timeout, and metadata-only artifact upload. This is still a development subset; no workflow success or result is claimed before its actual execution.
+
+## E1 v1.2 — corrected within-month data selection
+
+A sampling-bias audit found that the bounded monthly exporter previously kept only the **earliest** valid days in each month. As of v1.2 it selects evenly distributed, exact +24-hour valid pairs throughout the month; metadata identifies the new method. See [sampling audit](docs/E1_V12_SAMPLING_AUDIT.md) and regression test in `tests/test_multiyear.py`.
+
+This is a **development sampling fix**, not an unbiased climate-extreme sampling design. Do not compute multi-day heatwave duration from sparse monthly extracts. Existing v1.0 results remain reproducible as historical integration evidence, but must not be treated as equivalent to v1.2 resampled data. The cost-controlled contiguous-year workflow remains manual-only.

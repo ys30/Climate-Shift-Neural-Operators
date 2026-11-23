@@ -67,7 +67,7 @@ def main():
     try:
         x, y, years, times, skipped = extract(ds, args.years, args.max_per_month, args.stride)
         out.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(out, X=x, y=y, years=years, target_times=times)
+        np.savez_compressed(out, X=x, y=y, years=years, target_times=times,\n                            source_times=times - np.timedelta64(24, "h"))
         # Verify output round-trip and fail on schema corruption.
         check_x, check_y, check_years = load_npz_pairs(out)
         if check_x.shape != x.shape or check_y.shape != y.shape or not np.array_equal(check_years, years):
@@ -76,7 +76,7 @@ def main():
                 "actual_years": np.unique(years).tolist(), "max_per_month": args.max_per_month,
                 "stride": args.stride, "selection": "uniform_across_month_valid_pairs", "n_samples": len(years), "shape": list(x.shape),
                 "target_first": str(times[0]), "target_last": str(times[-1]),
-                "skipped_months": skipped, "forecast_horizon_hours": 24,
+                "skipped_months": skipped, "forecast_horizon_hours": 24, "pair_time_provenance": "exact_24h_validated",
                 "unit": ds["2m_temperature"].attrs.get("units", "UNVERIFIED"),
                 "variable": "2m_temperature",
                 "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),

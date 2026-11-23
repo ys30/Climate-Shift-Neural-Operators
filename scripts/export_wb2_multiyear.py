@@ -31,7 +31,8 @@ def extract(ds, years, max_per_month=8, stride=4, include_source_times=False):
             try:
                 x, y, yy, stamps, origins = make_24h_pairs(
                     ds, start=start.isoformat(), end=end.isoformat(),
-                    stride=stride, max_samples=max_per_month, selection="uniform",\n                    return_source_times=True)
+                    stride=stride, max_samples=max_per_month, selection="uniform",
+                    return_source_times=True)
             except ValueError as exc:
                 # Only skip months genuinely outside the published data window.
                 if "No timestamps inside requested date window" not in str(exc) or "No exact 24-hour pairs" in str(exc):
@@ -43,7 +44,8 @@ def extract(ds, years, max_per_month=8, stride=4, include_source_times=False):
             x_all.append(x)
             y_all.append(y)
             yrs_all.append(yy)
-            times_all.append(stamps)\n            sources_all.append(origins)
+            times_all.append(stamps)
+            sources_all.append(origins)
     if not x_all:
         raise ValueError("No samples across requested years")
     target_times = np.concatenate(times_all)
@@ -68,9 +70,11 @@ def main():
         p.error("Refusing to overwrite an existing dataset or metadata")
     ds = open_public_wb2(args.store)
     try:
-        x, y, years, times, skipped, sources = extract(\n            ds, args.years, args.max_per_month, args.stride, include_source_times=True)
+        x, y, years, times, skipped, sources = extract(
+            ds, args.years, args.max_per_month, args.stride, include_source_times=True)
         out.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(out, X=x, y=y, years=years, target_times=times,\n                            source_times=sources)
+        np.savez_compressed(out, X=x, y=y, years=years, target_times=times,
+                            source_times=sources)
         # Verify output round-trip and fail on schema corruption.
         check_x, check_y, check_years = load_npz_pairs(out)
         if check_x.shape != x.shape or check_y.shape != y.shape or not np.array_equal(check_years, years):

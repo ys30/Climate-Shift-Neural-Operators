@@ -17,6 +17,7 @@ def audit(npz_path: str | Path, meta_path: str | Path | None = None,
     x, y, years = load_npz_pairs(path)
     with np.load(path, allow_pickle=False) as data:
         times = data["target_times"] if "target_times" in data.files else None
+        source_times = data["source_times"] if "source_times" in data.files else None
     if require_timestamps and times is None:
         raise ValueError("Cannot audit provenance: target_times absent")
     if times is not None:
@@ -40,6 +41,9 @@ def audit(npz_path: str | Path, meta_path: str | Path | None = None,
         "last_target": last,
         "samples_per_month": month_map,
         "timestamps_verified": times is not None,
+        "exact_24h_pairs_verified": source_times is not None,
+        "first_source": str(source_times[0]) if source_times is not None else None,
+        "last_source": str(source_times[-1]) if source_times is not None else None,
     }
     if meta_path is not None:
         metadata = json.loads(Path(meta_path).read_text(encoding="utf-8"))

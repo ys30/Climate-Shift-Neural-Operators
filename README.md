@@ -149,3 +149,9 @@ The next [contiguous-year development workflow](.github/workflows/e1-contiguous-
 A sampling-bias audit found that the bounded monthly exporter previously kept only the **earliest** valid days in each month. As of v1.2 it selects evenly distributed, exact +24-hour valid pairs throughout the month; metadata identifies the new method. See [sampling audit](docs/E1_V12_SAMPLING_AUDIT.md) and regression test in `tests/test_multiyear.py`.
 
 This is a **development sampling fix**, not an unbiased climate-extreme sampling design. Do not compute multi-day heatwave duration from sparse monthly extracts. Existing v1.0 results remain reproducible as historical integration evidence, but must not be treated as equivalent to v1.2 resampled data. The cost-controlled contiguous-year workflow remains manual-only.
+
+## E1 v1.3 — independent 24-hour pairing provenance
+
+New ERA5 exports now record **actual predictor/source timestamps**, read directly from the selected ERA5 input coordinates, plus target timestamps. The NPZ loader rejects records with non-increasing or invalid timestamps or a lead time other than exactly 24 hours. The audit reports `exact_24h_pairs_verified`; older NPZ files remain readable but cannot claim this stronger check. See [E1 v1.3 provenance protocol](docs/E1_V13_PAIR_PROVENANCE.md).
+
+The last v1.2 test passed: [GitHub Actions run 45245083243](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45245083243). The contiguous-year development benchmark has not yet run; it remains manual-only to control compute costs.

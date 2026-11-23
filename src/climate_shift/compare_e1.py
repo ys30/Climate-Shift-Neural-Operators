@@ -16,7 +16,8 @@ from .extremes import fit_hot_threshold, hot_diagnostics
 def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             test_end: int, embargo_years: int = 0, epochs: int = 4,
             batch_size: int = 8, seed: int = 2026, width: int = 8,
-            modes: int = 4, lr: float = 0.001,\n            require_pair_times: bool = False) -> dict:
+            modes: int = 4, lr: float = 0.001,
+            require_pair_times: bool = False) -> dict:
     if epochs < 1 or batch_size < 1 or width < 1 or modes < 1 or lr <= 0:
         raise ValueError("Invalid training hyperparameters")
     output = Path(output)

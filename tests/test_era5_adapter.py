@@ -42,3 +42,14 @@ def test_reject_duplicate_time():
 def test_reject_unavailable_area():
     with pytest.raises(ValueError):
         make_24h_pairs(fixture_ds(), lon_bounds=(-50., -40.))
+
+
+def test_source_coordinates_are_from_actual_dataset():
+    ds = fixture_ds(missing=True)
+    x, y, years, targets, origins = make_24h_pairs(
+        ds, start="2019-07-01", end="2019-07-03",
+        stride=1, max_samples=3, return_source_times=True)
+    assert len(origins) == len(targets)
+    assert np.all(targets - origins == np.timedelta64(24, "h"))
+    assert np.all(np.isin(origins, ds.time.values))
+    assert np.all(np.isin(targets, ds.time.values))

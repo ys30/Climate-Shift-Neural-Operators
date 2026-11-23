@@ -84,7 +84,16 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
                         "No physical consistency diagnostics"]
     }
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2, allow_nan=True) + "\n", encoding="utf-8")
+    def sanitize(value):
+        if isinstance(value, dict):
+            return {k: sanitize(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [sanitize(v) for v in value]
+        if isinstance(value, (float, np.floating)) and not np.isfinite(value):
+            return None
+        return value
+    report = sanitize(report)
+    output.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     return report
 
 def main():

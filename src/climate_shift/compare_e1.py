@@ -10,6 +10,7 @@ from .data import load_npz_pairs, chronological_masks
 from .metrics import regression_metrics
 from .models import FNO2d
 from .unet import UNet2d
+from .extremes import fit_hot_threshold, hot_diagnostics
 
 def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             test_end: int, embargo_years: int = 0, epochs: int = 4,
@@ -33,6 +34,8 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
     yy = torch.from_numpy((y - mean) / std)
     ids = [torch.from_numpy(np.flatnonzero(m)) for m in (train, val, test)]
     results = {"persistence": regression_metrics(x[test], y[test])}
+    threshold = fit_hot_threshold(y[train], 0.95)
+    tail_results = {"persistence": hot_diagnostics(x[test], y[test], threshold)}
     diagnostics = {}
     torch.set_num_threads(1)
     for name in ("fno", "unet"):
@@ -60,6 +63,7 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         with torch.no_grad():
             preds = model(xx[ids[2]]).numpy() * std + mean
         results[name] = regression_metrics(preds, y[test])
+        tail_results[name] = hot_diagnostics(preds, y[test], threshold)
         diagnostics[name] = {"parameter_count": sum(p.numel() for p in model.parameters()),
                              "best_val_mse_standardized": best}
     report = {
@@ -73,12 +77,14 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
                             "width": width, "modes": modes, "lr": lr},
         "train_target_normalization": {"mean": mean, "std": std},
         "diagnostics": diagnostics, "metrics": results,
+        "training_reference_p95_threshold": threshold,
+        "heat_exceedance_diagnostics": tail_results,
         "limitations": ["Unweighted grid metrics", "No climate-shift test",
                         "Same epoch count does not imply matched compute",
                         "No physical consistency diagnostics"]
     }
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    output.write_text(json.dumps(report, indent=2, allow_nan=True) + "\n", encoding="utf-8")
     return report
 
 def main():

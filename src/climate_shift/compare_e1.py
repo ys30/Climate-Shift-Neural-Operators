@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from .data import load_npz_pairs, chronological_masks
+from .split_isolation import audit_split_isolation
 from .metrics import regression_metrics
 from .models import FNO2d
 from .unet import UNet2d
@@ -23,6 +24,7 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         raise FileExistsError(output)
     x, y, years = load_npz_pairs(npz)
     train, val, test = chronological_masks(years, train_end, val_end, test_end, embargo_years)
+    split_audit = audit_split_isolation(npz, (train, val, test))
     if x.shape[1] != 1 or y.shape[1] != 1:
         raise ValueError("This comparison requires single-channel temperature data")
     if x.shape[-2] < 2 * modes or x.shape[-1] // 2 + 1 < modes:
@@ -71,6 +73,7 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         "input_sha256": hashlib.sha256(Path(npz).read_bytes()).hexdigest(),
         "year_boundaries": {"train_end": train_end, "val_end": val_end,
                             "test_end": test_end, "embargo_years": embargo_years},
+        "split_isolation": split_audit,
         "n_samples": dict(zip(("train", "validation", "test"),
                               (int(m.sum()) for m in (train, val, test)))),
         "hyperparameters": {"epochs": epochs, "batch_size": batch_size, "seed": seed,

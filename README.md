@@ -161,3 +161,9 @@ The last v1.2 test passed: [GitHub Actions run 45245083243](https://github.com/y
 A [timestamp-isolation guard](src/climate_shift/split_isolation.py) now audits chronological train, validation and test folds by comparing actual input `source_times` against previous-fold `target_times` before fitting FNO or U-Net. The JSON experiment report records the boundary gaps and verification status. Legacy arrays without both timestamp fields remain readable for older development examples, but their isolation is explicitly **unverified**. The [manual contiguous-year workflow](.github/workflows/e1-contiguous-dev.yml) now requires the audit to pass (`--require-pair-times`).
 
 See [v1.4 scientific caveats and regression checks](docs/E1_V14_SPLIT_ISOLATION.md). This stricter chronology is not a substitute for statistically independent geographic or climate-shift tests, and no additional ERA5 model results are claimed by this code revision.
+
+## E1 v1.5 — contiguous-year coverage preflight
+
+The previous syntax repair has passed in [GitHub Actions run 45282547649](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45282547649). The [manual contiguous-year development workflow](.github/workflows/e1-contiguous-dev.yml) now runs an additional [data coverage gate](src/climate_shift/coverage_gate.py) before training. It checks all expected 2008–2012 months, at least 20 pairs/month, uniform sampling metadata, complete source/target +24h timestamps, and matching provenance SHA-256. The [v1.5 protocol](docs/E1_V15_COVERAGE_GATE.md) describes usage and limits.
+
+**Status:** continuous-year ERA5 results are still unavailable until a new manual workflow run completes; no additional model result is claimed.

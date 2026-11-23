@@ -137,3 +137,9 @@ The [WeatherBench 2 real-data probe run 45103779035](https://github.com/ys30/Cli
 The [bounded real-data CI pilot](.github/workflows/e1-realdata-pilot.yml) now runs a tiny 3-year extraction, data provenance audit, and FNO/U-Net/persistence comparison with archived diagnostics. Inspect the workflow status/artifacts before claiming it completed. See [v1.0 source verification and pilot protocol](docs/E1_V10_VERIFIED_SOURCE_AND_PILOT.md).
 
 **No credible climate-shift or climate-change model results have yet been established.**
+
+## E1 v1.1 — actual ERA5 pilot evidence, then a manually gated larger test
+
+The [real ERA5 integration workflow](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45109019800) completed **successfully** (data extraction, timestamp audit and three-model calculation on actual observations/reanalysis). See [audited v1.0 numerical results](docs/E1_V10_ACTUAL_ERA5_PILOT_RESULTS.md): 72 17×17 samples from 2010/2015/2020; only two training epochs. Persistence outperformed insufficiently trained neural models in this tiny test, which is **not evidence of climate-shift generalization or architectural quality**.
+
+The next [contiguous-year development workflow](.github/workflows/e1-contiguous-dev.yml) is **manual-only** to control GitHub Actions compute costs. It proposes 2008–2010 training, 2011 validation and 2012 test, up to 24 daily source times per month, five epochs, a strict 18-minute workflow timeout, and metadata-only artifact upload. This is still a development subset; no workflow success or result is claimed before its actual execution.

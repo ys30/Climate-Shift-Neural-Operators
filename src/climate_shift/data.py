@@ -10,13 +10,23 @@ def load_npz_pairs(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray
     target timestamps; upstream must prove predictor/target time alignment.
     """
     with np.load(path, allow_pickle=False) as data:
-        if set(data.files) != {"X", "y", "years"}:
-            raise ValueError("NPZ must contain exactly X, y, years")
+        if set(data.files) not in ({"X", "y", "years"}, {"X", "y", "years", "target_times"}):
+            raise ValueError("NPZ must contain X, y, years and optional target_times")
         x, y, years = data["X"], data["y"], data["years"]
+        target_times = data["target_times"] if "target_times" in data.files else None
     if x.ndim != 4 or y.ndim != 4 or x.shape[0] != y.shape[0] or x.shape[2:] != y.shape[2:]:
         raise ValueError("Expected matched [N,C,H,W] grid arrays")
     if len(years) != len(x) or years.ndim != 1 or years.dtype.kind not in 'iu':
         raise ValueError("years must be integer [N] target timestamp years")
+    if target_times is not None:
+        if (target_times.shape != (len(years),) or
+                target_times.dtype.kind != "M" or np.isnat(target_times).any()):
+            raise ValueError("target_times must be valid datetime64 vector")
+        if len(target_times) > 1 and not np.all(np.diff(target_times) > np.timedelta64(0, "ns")):
+            raise ValueError("target_times must be unique and strictly increasing")
+        computed_years = target_times.astype("datetime64[Y]").astype(int) + 1970
+        if not np.array_equal(computed_years, years):
+            raise ValueError("target_times and years disagree")
     if not np.isfinite(x).all() or not np.isfinite(y).all():
         raise ValueError("NaN/Inf found; decide missing-data treatment upstream")
     return x.astype(np.float32), y.astype(np.float32), years.astype(int)

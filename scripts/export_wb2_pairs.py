@@ -9,8 +9,8 @@ import hashlib
 import json
 from pathlib import Path
 import numpy as np
-import xarray as xr
 from climate_shift.era5_adapter import make_24h_pairs
+from climate_shift.wb2_source import open_public_wb2
 
 DEFAULT_STORE = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
 
@@ -27,7 +27,7 @@ def main():
     if output.exists() or output.with_suffix(".json").exists():
         p.error("Output exists; refuse overwrite")
     # Consolidation choice is explicit for WeatherBench 2 Zarr stores.
-    ds = xr.open_zarr(args.store, consolidated=True, chunks=None)
+    ds = open_public_wb2(args.store)
     try:
         x, y, years, target_times = make_24h_pairs(
             ds, start=args.start, end=args.end, max_samples=args.max_samples, stride=args.stride

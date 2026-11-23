@@ -31,7 +31,7 @@ def extract(ds, years, max_per_month=8, stride=4):
             try:
                 x, y, yy, stamps = make_24h_pairs(
                     ds, start=start.isoformat(), end=end.isoformat(),
-                    stride=stride, max_samples=max_per_month)
+                    stride=stride, max_samples=max_per_month, selection="uniform")
             except ValueError as exc:
                 # Only skip months genuinely outside the published data window.
                 if "No timestamps inside requested date window" not in str(exc) or "No exact 24-hour pairs" in str(exc):
@@ -74,7 +74,7 @@ def main():
             raise RuntimeError("Post-export validation failed")
         meta = {"source": args.store, "requested_years": args.years,
                 "actual_years": np.unique(years).tolist(), "max_per_month": args.max_per_month,
-                "stride": args.stride, "n_samples": len(years), "shape": list(x.shape),
+                "stride": args.stride, "selection": "uniform_across_month_valid_pairs", "n_samples": len(years), "shape": list(x.shape),
                 "target_first": str(times[0]), "target_last": str(times[-1]),
                 "skipped_months": skipped, "forecast_horizon_hours": 24,
                 "unit": ds["2m_temperature"].attrs.get("units", "UNVERIFIED"),

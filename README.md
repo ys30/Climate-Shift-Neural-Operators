@@ -155,3 +155,9 @@ This is a **development sampling fix**, not an unbiased climate-extreme sampling
 New ERA5 exports now record **actual predictor/source timestamps**, read directly from the selected ERA5 input coordinates, plus target timestamps. The NPZ loader rejects records with non-increasing or invalid timestamps or a lead time other than exactly 24 hours. The audit reports `exact_24h_pairs_verified`; older NPZ files remain readable but cannot claim this stronger check. See [E1 v1.3 provenance protocol](docs/E1_V13_PAIR_PROVENANCE.md).
 
 The last v1.2 test passed: [GitHub Actions run 45245083243](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45245083243). The contiguous-year development benchmark has not yet run; it remains manual-only to control compute costs.
+
+## E1 v1.4 — strict chronological fold boundaries
+
+A [timestamp-isolation guard](src/climate_shift/split_isolation.py) now audits chronological train, validation and test folds by comparing actual input `source_times` against previous-fold `target_times` before fitting FNO or U-Net. The JSON experiment report records the boundary gaps and verification status. Legacy arrays without both timestamp fields remain readable for older development examples, but their isolation is explicitly **unverified**. The [manual contiguous-year workflow](.github/workflows/e1-contiguous-dev.yml) now requires the audit to pass (`--require-pair-times`).
+
+See [v1.4 scientific caveats and regression checks](docs/E1_V14_SPLIT_ISOLATION.md). This stricter chronology is not a substitute for statistically independent geographic or climate-shift tests, and no additional ERA5 model results are claimed by this code revision.

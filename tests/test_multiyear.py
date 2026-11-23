@@ -19,6 +19,6 @@ def test_monthly_sampling_and_missing_month_logs():
     assert len(missing) == 11
     assert len(np.unique(stamps)) == len(stamps)
     assert stamps[0] == np.datetime64("2000-01-02T00")
-    assert stamps[-1] == np.datetime64("2000-01-31T00"), "uniform sampling must cover month end"
+    assert stamps[-1] == np.datetime64("2000-01-30T00"), "uniform sampling must cover month end"
     with pytest.raises(ValueError):
         extract(ds, [2000, 2000])

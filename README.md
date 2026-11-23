@@ -129,3 +129,11 @@ See [v0.8 audit protocol](docs/E1_V08_DATA_AUDIT.md). Public source documentatio
 A bounded [WeatherBench 2 access probe](scripts/probe_wb2_access.py) and [GitHub Actions workflow](.github/workflows/wb2-access-probe.yml) now test anonymous Google Cloud access, verify the variable/time schema, and attempt an actual tiny temperature chunk read. A JSON diagnostic is uploaded even when the action fails. Both the single-week and multi-year exporters now use the shared [anonymous GCS reader](src/climate_shift/wb2_source.py).
 
 **Important:** The existence of this workflow is not evidence that it succeeded; inspect the specific Actions run and `wb2-access-probe` artifact. See [v0.9 data-access gate](docs/E1_V09_REMOTE_DATA_GATE.md). Full-year ERA5 training and OOD evidence remain pending.
+
+## E1 v1.0 — real ERA5 access verified; real-data pilot initiated
+
+The [WeatherBench 2 real-data probe run 45103779035](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45103779035) **passed**. It read a small genuine ERA5 temperature field and confirmed unit K, 1959-01-01 to 2023-01-10 timestamps, and the expected variable. This verifies remote access only, not full training or scientific skill.
+
+The [bounded real-data CI pilot](.github/workflows/e1-realdata-pilot.yml) now runs a tiny 3-year extraction, data provenance audit, and FNO/U-Net/persistence comparison with archived diagnostics. Inspect the workflow status/artifacts before claiming it completed. See [v1.0 source verification and pilot protocol](docs/E1_V10_VERIFIED_SOURCE_AND_PILOT.md).
+
+**No credible climate-shift or climate-change model results have yet been established.**

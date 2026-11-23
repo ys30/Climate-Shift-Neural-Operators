@@ -13,7 +13,7 @@ import numpy as np
 import xarray as xr
 from climate_shift.era5_adapter import make_24h_pairs
 from climate_shift.data import load_npz_pairs
-from scripts.export_wb2_pairs import DEFAULT_STORE
+DEFAULT_STORE = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
 
 def extract(ds, years, max_per_month=8, stride=4):
     if max_per_month < 1 or stride < 1:
@@ -27,7 +27,7 @@ def extract(ds, years, max_per_month=8, stride=4):
         for month in range(1, 13):
             start = date(year, month, 1)
             stop = date(year + (month == 12), (month % 12) + 1, 1)
-            end = stop.fromordinal(stop.toordinal() - 1)
+            end = date.fromordinal(stop.toordinal() - 1)
             try:
                 x, y, yy, stamps = make_24h_pairs(
                     ds, start=start.isoformat(), end=end.isoformat(),

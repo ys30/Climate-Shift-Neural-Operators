@@ -31,6 +31,14 @@ jobs:
             --input data/processed/e1_contiguous_dev.npz \
             --metadata data/processed/e1_contiguous_dev.json \
             --output outputs/e1_contiguous_dev_audit.json
+      - name: Require all expected years, monthly samples and verified +24h origins
+        run: |
+          python scripts/check_e1_coverage.py \
+            --input data/processed/e1_contiguous_dev.npz \
+            --metadata data/processed/e1_contiguous_dev.json \
+            --years 2008 2009 2010 2011 2012 \
+            --min-per-month 20 \
+            --output outputs/e1_contiguous_dev_coverage.json
       - name: Evaluate three models with validation checkpoint
         run: |
           python scripts/compare_e1.py \
@@ -47,6 +55,7 @@ jobs:
           path: |
             data/processed/e1_contiguous_dev.json
             outputs/e1_contiguous_dev_audit.json
+            outputs/e1_contiguous_dev_coverage.json
             outputs/e1_contiguous_dev_metrics.json
           retention-days: 14
           if-no-files-found: warn

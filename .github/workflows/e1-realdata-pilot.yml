@@ -1,0 +1,53 @@
+name: E1 ERA5 bounded real-data pilot
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/e1-realdata-pilot.yml
+
+permissions:
+  contents: read
+
+jobs:
+  realdata-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: python -m pip install -e '.[test,torch,era5]'
+      - name: Unit tests
+        run: python -m pytest
+      - name: Extract small multi-year real ERA5 subset
+        run: |
+          python scripts/export_wb2_multiyear.py \
+            --years 2010 2015 2020 --max-per-month 2 --stride 4 \
+            --output data/processed/e1_realdata_pilot.npz
+      - name: Audit real ERA5 extraction
+        run: |
+          python scripts/audit_e1.py \
+            --input data/processed/e1_realdata_pilot.npz \
+            --metadata data/processed/e1_realdata_pilot.json \
+            --output outputs/e1_realdata_pilot_audit.json
+      - name: Run small three-way real-data model pilot
+        run: |
+          python scripts/compare_e1.py \
+            --input data/processed/e1_realdata_pilot.npz \
+            --train-end 2010 --val-end 2015 --test-end 2020 \
+            --epochs 2 --width 8 --modes 4 \
+            --output outputs/e1_realdata_pilot_metrics.json
+      - name: Archive diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-realdata-pilot-diagnostics
+          path: |
+            data/processed/e1_realdata_pilot.json
+            outputs/e1_realdata_pilot_audit.json
+            outputs/e1_realdata_pilot_metrics.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -16,7 +16,7 @@ from .extremes import fit_hot_threshold, hot_diagnostics
 def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             test_end: int, embargo_years: int = 0, epochs: int = 4,
             batch_size: int = 8, seed: int = 2026, width: int = 8,
-            modes: int = 4, lr: float = 0.001) -> dict:
+            modes: int = 4, lr: float = 0.001,\n            require_pair_times: bool = False) -> dict:
     if epochs < 1 or batch_size < 1 or width < 1 or modes < 1 or lr <= 0:
         raise ValueError("Invalid training hyperparameters")
     output = Path(output)
@@ -24,7 +24,7 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         raise FileExistsError(output)
     x, y, years = load_npz_pairs(npz)
     train, val, test = chronological_masks(years, train_end, val_end, test_end, embargo_years)
-    split_audit = audit_split_isolation(npz, (train, val, test))
+    split_audit = audit_split_isolation(npz, (train, val, test), require_pair_times=require_pair_times)
     if x.shape[1] != 1 or y.shape[1] != 1:
         raise ValueError("This comparison requires single-channel temperature data")
     if x.shape[-2] < 2 * modes or x.shape[-1] // 2 + 1 < modes:
@@ -111,10 +111,11 @@ def main():
     p.add_argument("--seed", type=int, default=2026)
     p.add_argument("--width", type=int, default=8)
     p.add_argument("--modes", type=int, default=4)
+    p.add_argument("--require-pair-times", action="store_true")
     a = p.parse_args()
     print(json.dumps(compare(a.input, a.output, a.train_end, a.val_end, a.test_end,
                              a.embargo_years, a.epochs, a.batch_size,
-                             a.seed, a.width, a.modes), indent=2))
+                             a.seed, a.width, a.modes, require_pair_times=a.require_pair_times), indent=2))
 
 if __name__ == "__main__":
     main()

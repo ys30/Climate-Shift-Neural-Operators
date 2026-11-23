@@ -63,3 +63,18 @@ python scripts/synthetic_smoke.py --steps 10
 ```
 
 Synthetic targets are local averages of fabricated sinusoidal fields; smoke metrics only confirm the code executes and are not evidence for climate generalization. See [E1 data contract](docs/E1_DATA_CONTRACT.md) and [synthetic smoke CI](.github/workflows/synthetic-smoke.yml). The production data adapter, U-Net/transformer baselines, area-weighted metrics, full train/validation/test pipeline, and independent CMIP6 experiments are not yet implemented.
+
+## E1 v0.5: multi-year baseline trainer (development)
+
+Added `src/climate_shift/train_e1.py`, CLI `scripts/train_e1.py`, two pipeline tests, and [E1 run protocol](docs/E1_RUN_PROTOCOL.md). The trainer rejects incomplete chronological year partitions; computes train-only normalization; chooses the FNO checkpoint using validation loss; evaluates held-out years against persistence; and writes a reproducibility JSON with data SHA-256.
+
+```bash
+python -m pip install -e '.[test,torch,era5]'
+python -m pytest
+# Replace example years with audited, preregistered actual data availability:
+python scripts/train_e1.py --input data/processed/multi_year_pairs.npz \
+  --train-end 2015 --val-end 2018 --test-end 2022 \
+  --embargo-years 1 --epochs 10 --output outputs/e1_baseline.json
+```
+
+**Do not use the single-week 2019 adapter output for training:** a short single-year extraction is insufficient for all three held-out chronological partitions. Multi-year extraction and scientific partition freeze are still outstanding. No ERA5 performance numbers or climate-change conclusions have been produced.

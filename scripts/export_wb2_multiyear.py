@@ -72,9 +72,13 @@ def main():
     try:
         x, y, years, times, skipped, sources = extract(
             ds, args.years, args.max_per_month, args.stride, include_source_times=True)
+        latitude = np.asarray(ds.latitude.values, dtype=float)
+        latitude = latitude[(latitude >= 25.0) & (latitude <= 50.0)]
+        if latitude.shape != (x.shape[-2],):
+            raise ValueError("Observed latitude coordinates disagree with extracted grid")
         out.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(out, X=x, y=y, years=years, target_times=times,
-                            source_times=sources)
+                            source_times=sources, latitude=latitude)
         # Verify output round-trip and fail on schema corruption.
         check_x, check_y, check_years = load_npz_pairs(out)
         if check_x.shape != x.shape or check_y.shape != y.shape or not np.array_equal(check_years, years):
@@ -85,6 +89,7 @@ def main():
                 "target_first": str(times[0]), "target_last": str(times[-1]),
                 "skipped_months": skipped, "forecast_horizon_hours": 24, "pair_time_provenance": "exact_24h_validated",
                 "unit": ds["2m_temperature"].attrs.get("units", "UNVERIFIED"),
+                "latitude_degrees": latitude.tolist(),
                 "variable": "2m_temperature",
                 "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
                 "status": "bounded development data, NOT full ERA5 evaluation"}

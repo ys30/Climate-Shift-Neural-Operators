@@ -18,6 +18,7 @@ def audit(npz_path: str | Path, meta_path: str | Path | None = None,
     with np.load(path, allow_pickle=False) as data:
         times = data["target_times"] if "target_times" in data.files else None
         source_times = data["source_times"] if "source_times" in data.files else None
+        latitude = data["latitude"] if "latitude" in data.files else None
     if require_timestamps and times is None:
         raise ValueError("Cannot audit provenance: target_times absent")
     if times is not None:
@@ -41,6 +42,7 @@ def audit(npz_path: str | Path, meta_path: str | Path | None = None,
         "last_target": last,
         "samples_per_month": month_map,
         "timestamps_verified": times is not None,
+        "latitude_coordinates_verified": latitude is not None,
         "exact_24h_pairs_verified": source_times is not None,
         "first_source": str(source_times[0]) if source_times is not None else None,
         "last_source": str(source_times[-1]) if source_times is not None else None,
@@ -56,6 +58,10 @@ def audit(npz_path: str | Path, meta_path: str | Path | None = None,
             raise ValueError("Metadata timestamp bounds mismatch")
         if metadata.get("variable") != "2m_temperature" or metadata.get("forecast_horizon_hours", metadata.get("forecast_lead_hours")) != 24:
             raise ValueError("Unexpected variable or forecast horizon")
+        if latitude is not None:
+            expected_lat = metadata.get("latitude_degrees")
+            if expected_lat is None or not np.array_equal(np.asarray(expected_lat, dtype=float), latitude):
+                raise ValueError("Metadata latitude coordinates mismatch")
         result["metadata_verified"] = True
         result["source"] = metadata.get("source")
         result["unit"] = metadata.get("unit")

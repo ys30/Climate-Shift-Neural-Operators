@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from .data import load_npz_pairs, chronological_masks
 from .split_isolation import audit_split_isolation
-from .metrics import regression_metrics
+from .metrics import regression_metrics, latitude_weighted_metrics
 from .models import FNO2d
 from .unet import UNet2d
 from .extremes import fit_hot_threshold, hot_diagnostics
@@ -36,9 +36,14 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
     xx = torch.from_numpy((x - mean) / std)
     yy = torch.from_numpy((y - mean) / std)
     ids = [torch.from_numpy(np.flatnonzero(m)) for m in (train, val, test)]
+    with np.load(npz, allow_pickle=False) as data:
+        latitude = data["latitude"] if "latitude" in data.files else None
+    weighted_results = {} if latitude is not None else None
     results = {"persistence": regression_metrics(x[test], y[test])}
+    if latitude is not None:
+        weighted_results["persistence"] = latitude_weighted_metrics(x[test], y[test], latitude)
     threshold = fit_hot_threshold(y[train], 0.95)
-    tail_results = {"persistence": hot_diagnostics(x[test], y[test], threshold)}
+    tail_results = {"persistence": hot_diagnostics(x[test], y[test], threshold, latitude=latitude)}
     diagnostics = {}
     torch.set_num_threads(1)
     for name in ("fno", "unet"):
@@ -66,7 +71,9 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         with torch.no_grad():
             preds = model(xx[ids[2]]).numpy() * std + mean
         results[name] = regression_metrics(preds, y[test])
-        tail_results[name] = hot_diagnostics(preds, y[test], threshold)
+        tail_results[name] = hot_diagnostics(preds, y[test], threshold, latitude=latitude)
+        if latitude is not None:
+            weighted_results[name] = latitude_weighted_metrics(preds, y[test], latitude)
         diagnostics[name] = {"parameter_count": sum(p.numel() for p in model.parameters()),
                              "best_val_mse_standardized": best}
     report = {
@@ -81,9 +88,11 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
                             "width": width, "modes": modes, "lr": lr},
         "train_target_normalization": {"mean": mean, "std": std},
         "diagnostics": diagnostics, "metrics": results,
+        "latitude_weighted_metrics": weighted_results,
+        "area_weighting_status": "cos(latitude)" if latitude is not None else "missing_latitude_legacy_unweighted",
         "training_reference_p95_threshold": threshold,
         "heat_exceedance_diagnostics": tail_results,
-        "limitations": ["Unweighted grid metrics", "No climate-shift test",
+        "limitations": ["Some metrics unweighted; weighted metrics reported separately when latitude exists", "No climate-shift test",
                         "Same epoch count does not imply matched compute",
                         "No physical consistency diagnostics"]
     }

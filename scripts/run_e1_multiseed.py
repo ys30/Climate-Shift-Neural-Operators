@@ -24,6 +24,11 @@ def run_seeds(input_path: str, output_dir: str, train_end: int, val_end: int,
                                require_pair_times=require_pair_times))
     if require_pair_times and any(r["split_isolation"]["status"] != "passed" for r in reports):
         raise ValueError("Every seed must pass a strict timestamp isolation audit")
+    if len({r["input_sha256"] for r in reports}) != 1:
+        raise ValueError("All seeds must use the identical input dataset checksum")
+    weighted_availability = [r.get("latitude_weighted_metrics") is not None for r in reports]
+    if any(weighted_availability) and not all(weighted_availability):
+        raise ValueError("Area-weighted scores cannot be mixed across seeds")
     summary = {"status": "development only; no scientific inference",
                "input_sha256": reports[0]["input_sha256"],
                "split_isolation": reports[0]["split_isolation"],
@@ -47,9 +52,52 @@ def run_seeds(input_path: str, output_dir: str, train_end: int, val_end: int,
                     "individual": values.tolist(),
                 }
     for name in ("fno", "unet", "persistence"):
+        recall = np.asarray(
+            [r["heat_exceedance_diagnostics"][name]["hot_recall"] for r in reports], dtype=float
+        )
         summary["models"][name]["heat_recall"] = {
-            "individual": [r["heat_exceedance_diagnostics"][name]["hot_recall"] for r in reports]
+            "individual": [float(v) if np.isfinite(v) else None for v in recall],
+            "mean": float(recall.mean()) if np.isfinite(recall).all() else None,
+            "sd_across_seeds": float(recall.std(ddof=1)) if np.isfinite(recall).all() else None,
         }
+    summary["area_weighting_status"] = (
+        "cos(latitude) in weighted metrics and hot-tail diagnostics"
+        if all(weighted_availability) else "unweighted legacy source"
+    )
+    summary["paired_differences"] = {}
+    for newer, older in (("fno", "persistence"), ("unet", "persistence"), ("fno", "unet")):
+        pair = f"{newer}_minus_{older}"
+        summary["paired_differences"][pair] = {}
+        for metric in ("rmse", "mae"):
+            delta = np.asarray(
+                [r["metrics"][newer][metric] - r["metrics"][older][metric] for r in reports],
+                dtype=float,
+            )
+            summary["paired_differences"][pair][metric] = {
+                "individual": delta.tolist(), "mean": float(delta.mean()),
+                "sd_across_seeds": float(delta.std(ddof=1)),
+            }
+            if all(weighted_availability):
+                weighted_delta = np.asarray(
+                    [r["latitude_weighted_metrics"][newer][metric] -
+                     r["latitude_weighted_metrics"][older][metric] for r in reports], dtype=float,
+                )
+                summary["paired_differences"][pair]["weighted_" + metric] = {
+                    "individual": weighted_delta.tolist(), "mean": float(weighted_delta.mean()),
+                    "sd_across_seeds": float(weighted_delta.std(ddof=1)),
+                }
+        p_recall = summary["models"][newer]["heat_recall"]["individual"]
+        r_recall = summary["models"][older]["heat_recall"]["individual"]
+        if all(v is not None for v in p_recall + r_recall):
+            recall_delta = np.asarray(p_recall) - np.asarray(r_recall)
+            summary["paired_differences"][pair]["heat_recall"] = {
+                "individual": recall_delta.tolist(), "mean": float(recall_delta.mean()),
+                "sd_across_seeds": float(recall_delta.std(ddof=1)),
+            }
+        else:
+            summary["paired_differences"][pair]["heat_recall"] = {
+                "individual": None, "mean": None, "sd_across_seeds": None,
+            }
     (out / "seed_summary.json").write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n")
     return summary
 

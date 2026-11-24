@@ -1,0 +1,77 @@
+name: E1 convergence 50 epochs on real ERA5 (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  convergence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: python -m compileall -q src scripts tests
+      - name: Install dependencies
+        run: python -m pip install -e '.[test,torch,era5]'
+      - name: Test parameter and checkpoint accounting
+        run: python -m pytest tests/test_parameter_convergence.py tests/test_compare_e1.py
+      - name: Archive audited parameter inventory
+        run: |
+          python scripts/audit_model_parameters.py \
+            --width 8 --modes 4 --grid-size 17 \
+            --output outputs/e1_parameter_inventory.json
+      - name: Export same bounded ERA5 cohort (2008–2012)
+        run: |
+          python scripts/export_wb2_multiyear.py \
+            --years 2008 2009 2010 2011 2012 \
+            --max-per-month 24 --stride 4 \
+            --output data/processed/e1_contiguous_dev.npz
+      - name: Fail closed on incomplete data
+        run: |
+          python scripts/check_e1_coverage.py \
+            --input data/processed/e1_contiguous_dev.npz \
+            --metadata data/processed/e1_contiguous_dev.json \
+            --years 2008 2009 2010 2011 2012 \
+            --min-per-month 20 \
+            --output outputs/e1_convergence_coverage.json
+      - name: Fit FNO and U-Net (50 epochs, validation checkpoints, single fixed seed)
+        run: |
+          python scripts/compare_e1.py \
+            --input data/processed/e1_contiguous_dev.npz \
+            --train-end 2010 --val-end 2011 --test-end 2012 \
+            --epochs 50 --batch-size 8 --seed 11 \
+            --width 8 --modes 4 --require-pair-times \
+            --output outputs/e1_convergence_50epochs.json
+      - name: Verify epoch curves and training-only threshold metrics
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('outputs/e1_convergence_50epochs.json'))
+          assert d['split_isolation']['status']=='passed'
+          assert d['seasonal_local_p95_definition']['status']=='available_training_only'
+          assert d['area_weighting_status']=='cos(latitude)'
+          for m in ('fno','unet'):
+              diag=d['diagnostics'][m]
+              assert len(diag['history'])==50
+              assert diag['best_epoch'] in range(1,51)
+              assert diag['parameter_accounting']['real_scalar_degrees_of_freedom'] > 0
+          print("Verified 50-epoch histories and independent validation checkpoints")
+          PY
+      - name: Upload metadata and diagnostics only (never raw ERA5 fields)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-era5-50epoch-convergence
+          path: |
+            data/processed/e1_contiguous_dev.json
+            outputs/e1_parameter_inventory.json
+            outputs/e1_convergence_coverage.json
+            outputs/e1_convergence_50epochs.json
+          retention-days: 14
+          if-no-files-found: warn

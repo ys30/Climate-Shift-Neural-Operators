@@ -10,7 +10,7 @@ def load_npz_pairs(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray
     target timestamps; upstream must prove predictor/target time alignment.
     """
     with np.load(path, allow_pickle=False) as data:
-        allowed = {"X", "y", "years", "target_times", "source_times"}
+        allowed = {"X", "y", "years", "target_times", "source_times", "latitude"}
         keys = set(data.files)
         if not {"X", "y", "years"} <= keys or keys - allowed:
             raise ValueError("NPZ must contain X, y, years and optional time arrays")
@@ -19,6 +19,7 @@ def load_npz_pairs(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray
         x, y, years = data["X"], data["y"], data["years"]
         target_times = data["target_times"] if "target_times" in data.files else None
         source_times = data["source_times"] if "source_times" in data.files else None
+        latitude = data["latitude"] if "latitude" in data.files else None
     if x.ndim != 4 or y.ndim != 4 or x.shape[0] != y.shape[0] or x.shape[2:] != y.shape[2:]:
         raise ValueError("Expected matched [N,C,H,W] grid arrays")
     if len(years) != len(x) or years.ndim != 1 or years.dtype.kind not in 'iu':
@@ -41,6 +42,12 @@ def load_npz_pairs(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray
             raise ValueError("Every source-target pair must have an exact +24h lead")
         if len(source_times) > 1 and not np.all(np.diff(source_times) > np.timedelta64(0, "ns")):
             raise ValueError("source_times must be unique and strictly increasing")
+    if latitude is not None:
+        if (latitude.shape != (x.shape[-2],) or not np.issubdtype(latitude.dtype, np.number)
+                or not np.isfinite(latitude).all() or np.any(np.abs(latitude) > 90)):
+            raise ValueError("latitude must be finite degree coordinates matching grid rows")
+        if len(np.unique(latitude)) != len(latitude):
+            raise ValueError("latitude must have unique grid-row coordinates")
     if not np.isfinite(x).all() or not np.isfinite(y).all():
         raise ValueError("NaN/Inf found; decide missing-data treatment upstream")
     return x.astype(np.float32), y.astype(np.float32), years.astype(int)

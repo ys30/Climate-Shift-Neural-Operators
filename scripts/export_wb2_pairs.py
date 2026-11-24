@@ -33,15 +33,20 @@ def main():
             ds, start=args.start, end=args.end, max_samples=args.max_samples, stride=args.stride,
             return_source_times=True
         )
+        latitude = np.asarray(ds.latitude.values, dtype=float)
+        latitude = latitude[(latitude >= 25.0) & (latitude <= 50.0)]
+        if latitude.shape != (x.shape[-2],):
+            raise ValueError("Observed latitude coordinates disagree with extracted grid")
         output.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(output, X=x, y=y, years=years, target_times=target_times,
-                            source_times=source_times)
+                            source_times=source_times, latitude=latitude)
         sha = hashlib.sha256(output.read_bytes()).hexdigest()
         meta = {"source": args.store, "variable": "2m_temperature", "source_time_range": [args.start, args.end],
                 "forecast_lead_hours": 24, "pair_time_provenance": "exact_24h_validated", "lat_bounds": [25.0, 50.0], "lon_bounds": [-125.0, -100.0],
                 "stride": args.stride, "samples": len(years), "target_first": str(target_times[0]),
                 "target_last": str(target_times[-1]), "array_shape": list(x.shape),
                 "unit": ds["2m_temperature"].attrs.get("units", "UNVERIFIED"),
+                "latitude_degrees": latitude.tolist(),
                 "sha256_npz": sha, "scientific_status": "data preparation only; no model results"}
         output.with_suffix(".json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(meta, indent=2))

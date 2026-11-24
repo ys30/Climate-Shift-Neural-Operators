@@ -46,19 +46,28 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         weighted_results["persistence"] = latitude_weighted_metrics(x[test], y[test], latitude)
     threshold = fit_hot_threshold(y[train], 0.95)
     tail_results = {"persistence": hot_diagnostics(x[test], y[test], threshold, latitude=latitude)}
-    seasonal_reference = None
+    seasonal_reference = {"status": "unavailable_missing_target_times"}
     seasonal_tail = None
     if target_times is not None:
-        # Fail closed on missing training months rather than silently fitting with
-        # validation or test observations.
-        train_cutoffs, seasonal_reference = fit_local_monthly_p95(
-            y[train], target_times[train], min_samples_per_month=20
-        )
-        seasonal_tail = {
-            "persistence": local_monthly_hot_diagnostics(
-                x[test], y[test], target_times[test], train_cutoffs, latitude=latitude
+        month_ids = target_times[train].astype("datetime64[M]").astype("int64") % 12 + 1
+        train_month_counts = {f"{m:02d}": int((month_ids == m).sum()) for m in range(1, 13)}
+        if min(train_month_counts.values()) >= 20:
+            # Threshold fit sees only training targets; validation/test held out.
+            train_cutoffs, seasonal_reference = fit_local_monthly_p95(
+                y[train], target_times[train], min_samples_per_month=20
             )
-        }
+            seasonal_reference["status"] = "available_training_only"
+            seasonal_tail = {
+                "persistence": local_monthly_hot_diagnostics(
+                    x[test], y[test], target_times[test], train_cutoffs, latitude=latitude
+                )
+            }
+        else:
+            seasonal_reference = {
+                "status": "unavailable_insufficient_training_monthly_coverage",
+                "samples_per_month": train_month_counts,
+                "minimum_required_per_month": 20,
+            }
     diagnostics = {}
     torch.set_num_threads(1)
     for name in ("fno", "unet"):

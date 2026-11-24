@@ -177,3 +177,9 @@ A separate [manual-only 3-seed ERA5 workflow](.github/workflows/e1-three-seed-de
 ## E1 v1.7 — area-weighted real-ERA5 comparison (code ready)
 
 [Observed-latitude area weighting](docs/E1_V17_AREA_WEIGHTED_EVALUATION.md) adds actual ERA5 row coordinates to new exports and checks their alignment against sidecar metadata. Evaluation now separately reports existing equal-gridcell skill and cosine-latitude-weighted MAE/RMSE/bias and high-temperature exceedance diagnostics. Three-seed reports also summarize weighted metrics when supported. Prior 2008–2012 [real ERA5 results](docs/E1_V16_REAL_ERA5_CONTIGUOUS_RESULTS.md) remain **unweighted**. A new manual three-seed ERA5 run is required before reporting real weighted scores.
+
+## E1 v1.8 — real 3-seed replication now verified
+
+The [three-seed ERA5 replication](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45295324701) completed successfully using v1.6 code, 1,440 sampled ERA5 temperature field pairs and seeds 11/22/33. **Unweighted** test RMSE across seeds: FNO **3.2444 ± 0.0217 K**, U-Net **3.1893 ± 0.0208 K**, Persistence **3.5369 K**. Hot-gridcell recall was approximately **0.545** (FNO), **0.502** (U-Net), and **0.733** (Persistence). See [the verified run report](docs/E1_V18_THREE_SEED_REAL_ERA5_RESULTS.md) for per-seed values and limitations.
+
+The multi-seed summary now includes explicit paired FNO-vs-Persistence, U-Net-vs-Persistence and FNO-vs-U-Net differences plus Recall mean/SD, and cosine-latitude-weighted differences **only when actual latitude coordinates are present**. This new reporting logic has tests but must not be mistaken for observed weighted metrics from the already completed v1.6 run. A **new manual run** on updated main is needed to generate weighted ERA5 results.

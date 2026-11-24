@@ -60,6 +60,17 @@ def run_seeds(input_path: str, output_dir: str, train_end: int, val_end: int,
             "mean": float(recall.mean()) if np.isfinite(recall).all() else None,
             "sd_across_seeds": float(recall.std(ddof=1)) if np.isfinite(recall).all() else None,
         }
+    summary["seasonal_local_p95_definition"] = reports[0].get("seasonal_local_p95_definition")
+    seasonal_available = all(r.get("seasonal_local_hot_diagnostics") is not None for r in reports)
+    if seasonal_available:
+        for name in ("fno", "unet", "persistence"):
+            values = [r["seasonal_local_hot_diagnostics"][name]["hot_recall"] for r in reports]
+            good = all(v is not None and np.isfinite(v) for v in values)
+            summary["models"][name]["monthly_local_hot_recall"] = {
+                "individual": values,
+                "mean": float(np.mean(values)) if good else None,
+                "sd_across_seeds": float(np.std(values, ddof=1)) if good else None,
+            }
     summary["area_weighting_status"] = (
         "cos(latitude) in weighted metrics and hot-tail diagnostics"
         if all(weighted_availability) else "unweighted legacy source"

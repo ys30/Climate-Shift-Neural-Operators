@@ -37,6 +37,15 @@ def run_seeds(input_path: str, output_dir: str, train_end: int, val_end: int,
                 "sd_across_seeds": float(values.std(ddof=1)),
                 "individual": values.tolist(),
             }
+    if all(r.get("latitude_weighted_metrics") is not None for r in reports):
+        for name in ("fno", "unet", "persistence"):
+            for metric in ("mae", "rmse", "bias"):
+                values = np.array([r["latitude_weighted_metrics"][name][metric] for r in reports])
+                summary["models"][name]["weighted_" + metric] = {
+                    "mean": float(values.mean()),
+                    "sd_across_seeds": float(values.std(ddof=1)),
+                    "individual": values.tolist(),
+                }
     for name in ("fno", "unet", "persistence"):
         summary["models"][name]["heat_recall"] = {
             "individual": [r["heat_exceedance_diagnostics"][name]["hot_recall"] for r in reports]

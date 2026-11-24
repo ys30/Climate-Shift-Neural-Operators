@@ -13,7 +13,7 @@ from .models import FNO2d
 from .unet import UNet2d
 from .extremes import fit_hot_threshold, hot_diagnostics
 from .seasonal_extremes import fit_local_monthly_p95, local_monthly_hot_diagnostics
-from scripts.audit_model_parameters import parameter_report
+from .parameter_audit import parameter_report
 
 def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             test_end: int, embargo_years: int = 0, epochs: int = 4,

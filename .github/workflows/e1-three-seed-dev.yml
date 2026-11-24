@@ -43,6 +43,23 @@ jobs:
             --train-end 2010 --val-end 2011 --test-end 2012 \
             --seeds 11 22 33 --epochs 5 --width 8 --modes 4 \
             --require-pair-times
+      - name: Fail if weighted or monthly-local real-data metrics are missing
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("outputs/e1_three_seeds/seed_summary.json")
+          data = json.loads(p.read_text())
+          assert data["area_weighting_status"].startswith("cos(latitude)"), data["area_weighting_status"]
+          assert data["seasonal_local_p95_definition"]["status"] == "available_training_only"
+          assert data["split_isolation"]["status"] == "passed"
+          for model in ("fno", "unet", "persistence"):
+              item = data["models"][model]
+              assert len(item["weighted_rmse"]["individual"]) == 3
+              assert len(item["monthly_local_hot_recall"]["individual"]) == 3
+          assert "weighted_rmse" in data["paired_differences"]["fno_minus_unet"]
+          print("Verified: weighted, monthly-local, strict 3-seed ERA5 outputs.")
+          PY
       - name: Archive non-data diagnostics
         if: always()
         uses: actions/upload-artifact@v4

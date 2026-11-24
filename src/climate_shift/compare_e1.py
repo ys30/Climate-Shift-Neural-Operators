@@ -12,6 +12,7 @@ from .metrics import regression_metrics, latitude_weighted_metrics
 from .models import FNO2d
 from .unet import UNet2d
 from .extremes import fit_hot_threshold, hot_diagnostics
+from .seasonal_extremes import fit_local_monthly_p95, local_monthly_hot_diagnostics
 
 def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             test_end: int, embargo_years: int = 0, epochs: int = 4,
@@ -38,12 +39,26 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
     ids = [torch.from_numpy(np.flatnonzero(m)) for m in (train, val, test)]
     with np.load(npz, allow_pickle=False) as data:
         latitude = data["latitude"] if "latitude" in data.files else None
+        target_times = data["target_times"] if "target_times" in data.files else None
     weighted_results = {} if latitude is not None else None
     results = {"persistence": regression_metrics(x[test], y[test])}
     if latitude is not None:
         weighted_results["persistence"] = latitude_weighted_metrics(x[test], y[test], latitude)
     threshold = fit_hot_threshold(y[train], 0.95)
     tail_results = {"persistence": hot_diagnostics(x[test], y[test], threshold, latitude=latitude)}
+    seasonal_reference = None
+    seasonal_tail = None
+    if target_times is not None:
+        # Fail closed on missing training months rather than silently fitting with
+        # validation or test observations.
+        train_cutoffs, seasonal_reference = fit_local_monthly_p95(
+            y[train], target_times[train], min_samples_per_month=20
+        )
+        seasonal_tail = {
+            "persistence": local_monthly_hot_diagnostics(
+                x[test], y[test], target_times[test], train_cutoffs, latitude=latitude
+            )
+        }
     diagnostics = {}
     torch.set_num_threads(1)
     for name in ("fno", "unet"):
@@ -74,6 +89,10 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         tail_results[name] = hot_diagnostics(preds, y[test], threshold, latitude=latitude)
         if latitude is not None:
             weighted_results[name] = latitude_weighted_metrics(preds, y[test], latitude)
+        if seasonal_tail is not None:
+            seasonal_tail[name] = local_monthly_hot_diagnostics(
+                preds, y[test], target_times[test], train_cutoffs, latitude=latitude
+            )
         diagnostics[name] = {"parameter_count": sum(p.numel() for p in model.parameters()),
                              "best_val_mse_standardized": best}
     report = {
@@ -92,6 +111,8 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         "area_weighting_status": "cos(latitude)" if latitude is not None else "missing_latitude_legacy_unweighted",
         "training_reference_p95_threshold": threshold,
         "heat_exceedance_diagnostics": tail_results,
+        "seasonal_local_p95_definition": seasonal_reference,
+        "seasonal_local_hot_diagnostics": seasonal_tail,
         "limitations": ["Some metrics unweighted; weighted metrics reported separately when latitude exists", "No climate-shift test",
                         "Same epoch count does not imply matched compute",
                         "No physical consistency diagnostics"]

@@ -13,6 +13,7 @@ from .models import FNO2d
 from .unet import UNet2d
 from .extremes import fit_hot_threshold, hot_diagnostics
 from .seasonal_extremes import fit_local_monthly_p95, local_monthly_hot_diagnostics
+from scripts.audit_model_parameters import parameter_report
 
 def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             test_end: int, embargo_years: int = 0, epochs: int = 4,
@@ -75,20 +76,30 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         model = (FNO2d(width=width, modes_y=modes, modes_x=modes, depth=2)
                  if name == "fno" else UNet2d(width=width))
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        best, best_state = float("inf"), None
-        for _ in range(epochs):
+        best, best_state, best_epoch = float("inf"), None, None
+        epoch_history = []
+        for epoch in range(1, epochs + 1):
             model.train()
             order = ids[0][torch.randperm(len(ids[0]))]
+            total_train_loss, total_train_seen = 0.0, 0
             for sub in order.split(batch_size):
                 optimizer.zero_grad()
                 loss = torch.nn.functional.mse_loss(model(xx[sub]), yy[sub])
                 loss.backward()
                 optimizer.step()
+                total_train_loss += float(loss.detach()) * len(sub)
+                total_train_seen += len(sub)
             model.eval()
             with torch.no_grad():
                 val_loss = float(torch.nn.functional.mse_loss(model(xx[ids[1]]), yy[ids[1]]))
+            epoch_history.append({
+                "epoch": epoch,
+                "minibatch_train_mse_standardized": total_train_loss / total_train_seen,
+                "validation_mse_standardized": val_loss,
+            })
             if val_loss < best:
                 best = val_loss
+                best_epoch = epoch
                 best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
         model.load_state_dict(best_state)
         model.eval()
@@ -102,8 +113,14 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             seasonal_tail[name] = local_monthly_hot_diagnostics(
                 preds, y[test], target_times[test], train_cutoffs, latitude=latitude
             )
-        diagnostics[name] = {"parameter_count": sum(p.numel() for p in model.parameters()),
-                             "best_val_mse_standardized": best}
+        diagnostics[name] = {
+            "parameter_count": sum(p.numel() for p in model.parameters()),
+            "parameter_accounting": parameter_report(model),
+            "best_val_mse_standardized": best,
+            "best_epoch": best_epoch,
+            "history": epoch_history,
+            "minibatch_loss_caveat": "Training batch MSE is recorded during weight updates, not a frozen post-epoch train-set loss",
+        }
     report = {
         "status": "development-only; NOT evidence of climate-shift skill",
         "input_sha256": hashlib.sha256(Path(npz).read_bytes()).hexdigest(),

@@ -1,0 +1,4 @@
+One-time E1 capacity-matched pilot trigger.
+Three predeclared FNO/U-Net real-DOF-near pairs; 50 epochs, seed 11, same 2008–2012 sparse WB2 ERA5 paired forecast cohort.
+Workflow performs tests and fail-closed timestamp, spatial weighting and parameter accounting audits.
+Do not retrigger on general code or documentation pushes.

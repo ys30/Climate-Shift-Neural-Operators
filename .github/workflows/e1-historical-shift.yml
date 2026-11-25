@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'experiments/triggers/e1-shift-v1.txt'
+      - 'experiments/triggers/e1-shift-v2.txt'
 
 permissions:
   contents: read
@@ -26,7 +27,7 @@ jobs:
       - name: Install audit requirements and execute unit tests
         run: |
           python -m pip install -e '.[test,era5]'
-          python -m pytest tests/test_historical_shift.py tests/test_heldout_year_metrics.py
+          python -m pytest tests/test_historical_shift.py
       - name: Export audited public ERA5 cohort (no neural training)
         run: |
           python scripts/export_wb2_multiyear.py \

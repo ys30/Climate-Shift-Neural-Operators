@@ -26,7 +26,7 @@ FNO trainable parameter accounting: **4,353 PyTorch elements**, **8,449 real sca
 | --- | ---: | ---: | ---: |
 | Persistence | 0.738879 | 0.542995 | −1.458796 |
 | FNO | 0.692915 | 0.424125 | −2.195769 |
-| U-Net | Read the complete JSON artifact | 0.406570 | −2.293472 |
+| U-Net | 0.680942 | 0.406570 | −2.293472 |
 
 **Interpretation:** Extended training markedly improves overall area-weighted RMSE; global-P95 recall for FNO also increases compared to the five-epoch seed-11 experiment. However monthly grid-local P95 recall remains below Persistence for both trained models, so increasing training iterations alone did not resolve the high-tail fidelity deficit.
 

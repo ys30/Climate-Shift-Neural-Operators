@@ -71,6 +71,35 @@ def run_seeds(input_path: str, output_dir: str, train_end: int, val_end: int,
                 "mean": float(np.mean(values)) if good else None,
                 "sd_across_seeds": float(np.std(values, ddof=1)) if good else None,
             }
+    # Aggregate independent heldout-year diagnostics across seeds. All years
+    # must be identical across runs, and model scores are never refitted here.
+    if all(r.get("per_test_year_metrics") is not None for r in reports):
+        years = sorted(reports[0]["per_test_year_metrics"]["persistence"])
+        for r in reports:
+            if any(sorted(r["per_test_year_metrics"][name]) != years
+                   for name in ("fno", "unet", "persistence")):
+                raise ValueError("Heldout year coverage differs across seeds")
+        summary["heldout_years"] = years
+        summary["per_test_year_models"] = {}
+        for year in years:
+            summary["per_test_year_models"][year] = {}
+            for name in ("fno", "unet", "persistence"):
+                items = [r["per_test_year_metrics"][name][year] for r in reports]
+                if len({item["n_samples"] for item in items}) != 1:
+                    raise ValueError("Heldout annual sample counts differ across seeds")
+                entry = {"n_samples": items[0]["n_samples"]}
+                for key, source in (("area_weighted_rmse", ("area_weighted", "rmse")),
+                                    ("area_weighted_mae", ("area_weighted", "mae")),
+                                    ("monthly_local_hot_recall", ("monthly_local_hot", "hot_recall"))):
+                    values = [item[source[0]][source[1]] if item.get(source[0]) is not None else None
+                              for item in items]
+                    good = all(v is not None and np.isfinite(v) for v in values)
+                    entry[key] = {
+                        "mean": float(np.mean(values)) if good else None,
+                        "sd_across_seeds": float(np.std(values, ddof=1)) if good else None,
+                        "individual": values,
+                    }
+                summary["per_test_year_models"][year][name] = entry
     summary["area_weighting_status"] = (
         "cos(latitude) in weighted metrics and hot-tail diagnostics"
         if all(weighted_availability) else "unweighted legacy source"

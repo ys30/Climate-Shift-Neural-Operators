@@ -7,6 +7,7 @@ on:
     paths:
       - 'experiments/triggers/e1-multiyear-v1.txt'
       - 'experiments/triggers/e1-multiyear-v2.txt'
+      - 'experiments/triggers/e1-conditional-v1.txt'
 
 permissions:
   contents: read
@@ -27,7 +28,7 @@ jobs:
       - name: Install and test year-specific evaluation
         run: |
           python -m pip install -e '.[test,torch,era5]'
-          python -m pytest tests/test_heldout_year_metrics.py tests/test_multiyear_summary.py tests/test_seasonal_e2e.py tests/test_parameter_convergence.py
+          python -m pytest tests/test_heldout_year_metrics.py tests/test_multiyear_summary.py tests/test_conditional_skill.py tests/test_seasonal_e2e.py tests/test_parameter_convergence.py
       - name: Export seven-year ERA5 reference cohort
         run: |
           python scripts/export_wb2_multiyear.py \
@@ -63,7 +64,13 @@ jobs:
               assert d["n_samples"]=={"train":864,"validation":288,"test":864}
               assert d["hyperparameters"]["epochs"]==100
               assert d["area_weighting_status"]=="cos(latitude)"
+              assert d["conditional_skill_reference"]=="train_only_month_local_mean_std"
               for model in ("persistence","fno","unet"):
+                  bins_by_year=d["per_test_year_anomaly_bin_errors"][model]
+                  assert set(bins_by_year)=={"2012","2013","2014"}
+                  for year_key in bins_by_year:
+                      bins=bins_by_year[year_key]["bins"]
+                      assert abs(sum(v["weighted_fraction"] for v in bins.values()) - 1)<1e-8
                   year=d["per_test_year_metrics"][model]
                   assert set(year)=={"2012","2013","2014"}
                   for yr in year:

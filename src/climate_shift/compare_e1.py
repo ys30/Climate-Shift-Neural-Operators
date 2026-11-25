@@ -19,8 +19,9 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             test_end: int, embargo_years: int = 0, epochs: int = 4,
             batch_size: int = 8, seed: int = 2026, width: int = 8,
             modes: int = 4, lr: float = 0.001,
-            require_pair_times: bool = False) -> dict:
-    if epochs < 1 or batch_size < 1 or width < 1 or modes < 1 or lr <= 0:
+            require_pair_times: bool = False,
+            unet_width: int | None = None) -> dict:
+    if epochs < 1 or batch_size < 1 or width < 1 or modes < 1 or lr <= 0 or (unet_width is not None and unet_width < 1):
         raise ValueError("Invalid training hyperparameters")
     output = Path(output)
     if output.exists():
@@ -74,7 +75,7 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
     for name in ("fno", "unet"):
         torch.manual_seed(seed)
         model = (FNO2d(width=width, modes_y=modes, modes_x=modes, depth=2)
-                 if name == "fno" else UNet2d(width=width))
+                 if name == "fno" else UNet2d(width=unet_width if unet_width is not None else width))
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         best, best_state, best_epoch = float("inf"), None, None
         epoch_history = []
@@ -130,7 +131,8 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         "n_samples": dict(zip(("train", "validation", "test"),
                               (int(m.sum()) for m in (train, val, test)))),
         "hyperparameters": {"epochs": epochs, "batch_size": batch_size, "seed": seed,
-                            "width": width, "modes": modes, "lr": lr},
+                            "width": width, "unet_width": unet_width if unet_width is not None else width,
+                            "modes": modes, "lr": lr},
         "train_target_normalization": {"mean": mean, "std": std},
         "diagnostics": diagnostics, "metrics": results,
         "latitude_weighted_metrics": weighted_results,
@@ -168,11 +170,13 @@ def main():
     p.add_argument("--seed", type=int, default=2026)
     p.add_argument("--width", type=int, default=8)
     p.add_argument("--modes", type=int, default=4)
+    p.add_argument("--unet-width", type=int)
     p.add_argument("--require-pair-times", action="store_true")
     a = p.parse_args()
     print(json.dumps(compare(a.input, a.output, a.train_end, a.val_end, a.test_end,
                              a.embargo_years, a.epochs, a.batch_size,
-                             a.seed, a.width, a.modes, require_pair_times=a.require_pair_times), indent=2))
+                             a.seed, a.width, a.modes, require_pair_times=a.require_pair_times,
+                             unet_width=a.unet_width), indent=2))
 
 if __name__ == "__main__":
     main()

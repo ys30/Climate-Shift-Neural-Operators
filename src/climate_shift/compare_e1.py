@@ -21,8 +21,9 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             batch_size: int = 8, seed: int = 2026, width: int = 8,
             modes: int = 4, lr: float = 0.001,
             require_pair_times: bool = False,
-            unet_width: int | None = None) -> dict:
-    if epochs < 1 or batch_size < 1 or width < 1 or modes < 1 or lr <= 0 or (unet_width is not None and unet_width < 1):
+            unet_width: int | None = None,
+            tail_weight: float = 0.0) -> dict:
+    if epochs < 1 or batch_size < 1 or width < 1 or modes < 1 or lr <= 0 or (unet_width is not None and unet_width < 1) or tail_weight < 0:
         raise ValueError("Invalid training hyperparameters")
     output = Path(output)
     if output.exists():
@@ -105,6 +106,13 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
                 target_times[test][years[test] == yr], month_mu, month_sd, latitude
             ) for yr in test_year_indices
         }}
+    if tail_weight > 0:
+        if seasonal_tail is None:
+            raise ValueError("Tail-weighted training requires complete training-only monthly local P95 reference")
+        cutoffs_std = torch.from_numpy(((train_cutoffs - mean) / std).astype(np.float32))
+        train_month_indices = torch.from_numpy(
+            (target_times.astype("datetime64[M]").astype("int64") % 12).astype(np.int64)
+        )
     diagnostics = {}
     torch.set_num_threads(1)
     for name in ("fno", "unet"):
@@ -120,7 +128,15 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             total_train_loss, total_train_seen = 0.0, 0
             for sub in order.split(batch_size):
                 optimizer.zero_grad()
-                loss = torch.nn.functional.mse_loss(model(xx[sub]), yy[sub])
+                forecast = model(xx[sub])
+                squared_error = (forecast - yy[sub]).square()
+                if tail_weight:
+                    # Distinct training-only local/month gridcell threshold, no test-data fitting.
+                    event = yy[sub, 0] > cutoffs_std[train_month_indices[sub]]
+                    train_weights = 1.0 + tail_weight * event[:, None].to(squared_error.dtype)
+                    loss = (squared_error * train_weights).mean()
+                else:
+                    loss = squared_error.mean()
                 loss.backward()
                 optimizer.step()
                 total_train_loss += float(loss.detach()) * len(sub)
@@ -178,7 +194,7 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
                               (int(m.sum()) for m in (train, val, test)))),
         "hyperparameters": {"epochs": epochs, "batch_size": batch_size, "seed": seed,
                             "width": width, "unet_width": unet_width if unet_width is not None else width,
-                            "modes": modes, "lr": lr},
+                            "modes": modes, "lr": lr, "tail_weight": tail_weight},
         "train_target_normalization": {"mean": mean, "std": std},
         "diagnostics": diagnostics, "metrics": results,
         "per_test_year_metrics": yearly_results,
@@ -220,12 +236,13 @@ def main():
     p.add_argument("--width", type=int, default=8)
     p.add_argument("--modes", type=int, default=4)
     p.add_argument("--unet-width", type=int)
+    p.add_argument("--tail-weight", type=float, default=0.0)
     p.add_argument("--require-pair-times", action="store_true")
     a = p.parse_args()
     print(json.dumps(compare(a.input, a.output, a.train_end, a.val_end, a.test_end,
                              a.embargo_years, a.epochs, a.batch_size,
                              a.seed, a.width, a.modes, require_pair_times=a.require_pair_times,
-                             unet_width=a.unet_width), indent=2))
+                             unet_width=a.unet_width, tail_weight=a.tail_weight), indent=2))
 
 if __name__ == "__main__":
     main()

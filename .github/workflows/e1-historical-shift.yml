@@ -1,0 +1,70 @@
+name: E1 ERA5 historical year-to-year distribution audit (one-time)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-shift-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-historical-shift-audit-v1
+  cancel-in-progress: false
+
+jobs:
+  shift-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install audit requirements and execute unit tests
+        run: |
+          python -m pip install -e '.[test,era5]'
+          python -m pytest tests/test_historical_shift.py tests/test_heldout_year_metrics.py
+      - name: Export audited public ERA5 cohort (no neural training)
+        run: |
+          python scripts/export_wb2_multiyear.py \
+            --years 2008 2009 2010 2011 2012 2013 2014 \
+            --max-per-month 24 --stride 4 \
+            --output data/processed/e1_shift_2008_2014.npz
+          python scripts/check_e1_coverage.py \
+            --input data/processed/e1_shift_2008_2014.npz \
+            --metadata data/processed/e1_shift_2008_2014.json \
+            --years 2008 2009 2010 2011 2012 2013 2014 \
+            --min-per-month 20 \
+            --output outputs/e1_shift_coverage.json
+      - name: Compute training-climatology-referenced year-to-year shift
+        run: |
+          python -m climate_shift.historical_shift \
+            --input data/processed/e1_shift_2008_2014.npz \
+            --output outputs/e1_historical_shift.json \
+            --train-end 2010 --test-start 2012 --test-end 2014
+      - name: Assert no validation/test fitting, complete annual results
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('outputs/e1_historical_shift.json'))
+          assert d['train_only_month_local_climatology'] is True
+          assert all(n==72 for n in d['train_counts_by_month'].values())
+          assert set(d['per_year'])=={'2008','2009','2010','2012','2013','2014'}
+          assert all(d['per_year'][str(year)]['n_pairs']==288 for year in range(2012,2015))
+          assert d['status']=='historical_descriptive_shift_not_climate_change_attribution'
+          print('Verified no future-year climatology fitting; year shifts are descriptive.')
+          PY
+      - name: Archive audit and distribution diagnostics without ERA5 fields
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-era5-historical-shift-descriptive
+          path: |
+            data/processed/e1_shift_2008_2014.json
+            outputs/e1_shift_coverage.json
+            outputs/e1_historical_shift.json
+          retention-days: 14
+          if-no-files-found: warn

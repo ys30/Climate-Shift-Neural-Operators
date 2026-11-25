@@ -1,0 +1,1 @@
+One-time launch for 2008–2014 ERA5 seven-year cohort. Train 2008–10, validate 2011, hold out 2012–14. Three model seeds, 100 epochs, year-by-year weighted and monthly-local extreme diagnostics. Triggered only through this file, not normal documentation commits.

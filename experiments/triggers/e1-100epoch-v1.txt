@@ -1,0 +1,4 @@
+One-time push trigger for v2.5 100-epoch three-seed ERA5 convergence experiment.
+Workflow: .github/workflows/e1-100epoch-seeds.yml
+Scope: 2008–2012 WeatherBench2 ERA5 sparse monthly pairs; seeds 11, 22, 33; epoch budget 100.
+Reruns are not automatically scheduled; future changes to unrelated files do not trigger this workflow.

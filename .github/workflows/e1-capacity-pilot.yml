@@ -1,0 +1,93 @@
+name: E1 capacity-matched ERA5 pilot (one-time trigger)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-capacity-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-capacity-pilot-2026
+  cancel-in-progress: false
+
+jobs:
+  matched-capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and test capacity machinery
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_capacity_compare.py tests/test_capacity_plan.py
+      - name: Export deterministic capacity grid and real ERA5 cohort
+        run: |
+          python scripts/plan_e1_capacity.py --output outputs/e1_capacity_plan.json
+          python scripts/export_wb2_multiyear.py \
+            --years 2008 2009 2010 2011 2012 --max-per-month 24 --stride 4 \
+            --output data/processed/e1_capacity_dev.npz
+          python scripts/check_e1_coverage.py \
+            --input data/processed/e1_capacity_dev.npz \
+            --metadata data/processed/e1_capacity_dev.json \
+            --years 2008 2009 2010 2011 2012 --min-per-month 20 \
+            --output outputs/e1_capacity_coverage.json
+      - name: Fit three parameter-near FNO and U-Net pairs (50 epochs, seed 11)
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          data = json.loads(Path('outputs/e1_capacity_plan.json').read_text())
+          for i, pair in enumerate(data['pairs'], 1):
+              cmd = [
+                  'python', 'scripts/compare_e1.py',
+                  '--input', 'data/processed/e1_capacity_dev.npz',
+                  '--output', f'outputs/e1_capacity_pair_{i}.json',
+                  '--train-end', '2010', '--val-end', '2011', '--test-end', '2012',
+                  '--epochs', '50', '--batch-size', '8', '--seed', '11',
+                  '--width', str(pair['fno_width']), '--modes', str(pair['fno_modes']),
+                  '--unet-width', str(pair['unet_width']), '--require-pair-times',
+              ]
+              subprocess.run(cmd, check=True)
+          PY
+      - name: Validate real-data model budgets and output integrity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          plan=json.loads(Path('outputs/e1_capacity_plan.json').read_text())
+          for i,pair in enumerate(plan['pairs'],1):
+              r=json.loads(Path(f'outputs/e1_capacity_pair_{i}.json').read_text())
+              assert r['split_isolation']['status']=='passed'
+              assert r['area_weighting_status']=='cos(latitude)'
+              assert r['seasonal_local_p95_definition']['status']=='available_training_only'
+              assert r['hyperparameters']['epochs']==50
+              assert r['diagnostics']['fno']['parameter_accounting']['real_scalar_degrees_of_freedom']==pair['fno_real_dof']
+              assert r['diagnostics']['unet']['parameter_accounting']['real_scalar_degrees_of_freedom']==pair['unet_real_dof']
+              for name in ('fno','unet'):
+                  assert len(r['diagnostics'][name]['history'])==50
+                  assert 1<=r['diagnostics'][name]['best_epoch']<=50
+              print(i, 'FNO', pair['fno_real_dof'],
+                    r['latitude_weighted_metrics']['fno']['rmse'],
+                    'U-Net', pair['unet_real_dof'],
+                    r['latitude_weighted_metrics']['unet']['rmse'])
+          PY
+      - name: Archive metadata, learning curves and scores (not ERA5 arrays)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-era5-capacity-pilot-3pairs
+          path: |
+            data/processed/e1_capacity_dev.json
+            outputs/e1_capacity_plan.json
+            outputs/e1_capacity_coverage.json
+            outputs/e1_capacity_pair_*.json
+          retention-days: 14
+          if-no-files-found: warn

@@ -14,6 +14,7 @@ from .unet import UNet2d
 from .extremes import fit_hot_threshold, hot_diagnostics
 from .seasonal_extremes import fit_local_monthly_p95, local_monthly_hot_diagnostics
 from .parameter_audit import parameter_report
+from .conditional_skill import fit_monthly_standardization, conditional_error
 
 def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
             test_end: int, embargo_years: int = 0, epochs: int = 4,
@@ -90,6 +91,20 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
     yearly_results["persistence"] = {
         str(yr): _year_score(x[test], y[test], yr) for yr in test_year_indices
     }
+    conditional_reference = None
+    conditional_results = None
+    if target_times is not None and latitude is not None and min(
+        int(np.sum(target_times[train].astype("datetime64[M]").astype("int64") % 12 + 1 == month))
+        for month in range(1, 13)
+    ) >= 20:
+        month_mu, month_sd = fit_monthly_standardization(y[train], target_times[train])
+        conditional_reference = "train_only_month_local_mean_std"
+        conditional_results = {"persistence": {
+            str(yr): conditional_error(
+                x[test][years[test] == yr], y[test][years[test] == yr],
+                target_times[test][years[test] == yr], month_mu, month_sd, latitude
+            ) for yr in test_year_indices
+        }}
     diagnostics = {}
     torch.set_num_threads(1)
     for name in ("fno", "unet"):
@@ -127,6 +142,14 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         with torch.no_grad():
             preds = model(xx[ids[2]]).numpy() * std + mean
         results[name] = regression_metrics(preds, y[test])
+        if conditional_results is not None:
+            conditional_results[name] = {
+                str(yr): conditional_error(
+                    preds[years[test] == yr], y[test][years[test] == yr],
+                    target_times[test][years[test] == yr],
+                    month_mu, month_sd, latitude
+                ) for yr in test_year_indices
+            }
         yearly_results[name] = {
             str(yr): _year_score(preds, y[test], yr) for yr in test_year_indices
         }
@@ -159,6 +182,8 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         "train_target_normalization": {"mean": mean, "std": std},
         "diagnostics": diagnostics, "metrics": results,
         "per_test_year_metrics": yearly_results,
+        "conditional_skill_reference": conditional_reference,
+        "per_test_year_anomaly_bin_errors": conditional_results,
         "latitude_weighted_metrics": weighted_results,
         "area_weighting_status": "cos(latitude)" if latitude is not None else "missing_latitude_legacy_unweighted",
         "training_reference_p95_threshold": threshold,

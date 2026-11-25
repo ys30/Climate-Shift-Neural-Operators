@@ -15,7 +15,7 @@ from climate_shift.parameter_audit import inventory
 def plan_capacity(
     grid_size: int = 17,
     fno_configs: tuple[tuple[int, int], ...] = ((8, 4), (12, 6), (16, 8)),
-    unet_widths: tuple[int, ...] = (4, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48),
+    unet_widths: tuple[int, ...] = (4, 6, 8, 9, 10, 12, 16, 20, 24, 32, 36, 40, 48),
 ) -> dict:
     if not fno_configs or not unet_widths:
         raise ValueError("Provide nonempty FNO and U-Net candidate grids")

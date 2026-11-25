@@ -1,0 +1,87 @@
+name: E1 ERA5 100-epoch three-seed convergence (one-time gated trigger)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-100epoch-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-100epoch-three-seed
+  cancel-in-progress: false
+
+jobs:
+  hundred-epoch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and run essential tests
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_parameter_convergence.py tests/test_multiseed.py
+      - name: Audit exact model parameter budgets
+        run: |
+          python scripts/audit_model_parameters.py --width 8 --modes 4 --grid-size 17 \
+            --output outputs/e1_100epoch_parameter_inventory.json
+      - name: Export real ERA5 2008–2012 paired targets
+        run: |
+          python scripts/export_wb2_multiyear.py \
+            --years 2008 2009 2010 2011 2012 \
+            --max-per-month 24 --stride 4 \
+            --output data/processed/e1_contiguous_dev.npz
+      - name: Require complete year-month coverage and exact 24h pairs
+        run: |
+          python scripts/check_e1_coverage.py \
+            --input data/processed/e1_contiguous_dev.npz \
+            --metadata data/processed/e1_contiguous_dev.json \
+            --years 2008 2009 2010 2011 2012 --min-per-month 20 \
+            --output outputs/e1_100epoch_coverage.json
+      - name: Train three independent seeds for 100 epochs
+        run: |
+          python scripts/run_e1_multiseed.py \
+            --input data/processed/e1_contiguous_dev.npz \
+            --output-dir outputs/e1_100epoch_seeds \
+            --train-end 2010 --val-end 2011 --test-end 2012 \
+            --seeds 11 22 33 --epochs 100 --width 8 --modes 4 \
+            --require-pair-times
+      - name: Validate complete 100-epoch and area-weighted outputs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out=Path('outputs/e1_100epoch_seeds')
+          d=json.loads((out/'seed_summary.json').read_text())
+          assert d['split_isolation']['status']=='passed'
+          assert d['area_weighting_status'].startswith('cos(latitude)')
+          assert d['seasonal_local_p95_definition']['status']=='available_training_only'
+          for seed in (11,22,33):
+              r=json.loads((out/f'seed_{seed}.json').read_text())
+              assert r['hyperparameters']['epochs']==100
+              for name in ('fno','unet'):
+                  assert len(r['diagnostics'][name]['history'])==100
+                  assert 1<=r['diagnostics'][name]['best_epoch']<=100
+          for name in ('fno','unet','persistence'):
+              assert len(d['models'][name]['weighted_rmse']['individual'])==3
+              assert len(d['models'][name]['monthly_local_hot_recall']['individual'])==3
+          print('Verified all 3 seeds, 100-epoch histories and area-weighted metrics')
+          PY
+      - name: Archive derived metrics and provenance, never raw ERA5 fields
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-era5-100epoch-3seed-results
+          path: |
+            data/processed/e1_contiguous_dev.json
+            outputs/e1_100epoch_parameter_inventory.json
+            outputs/e1_100epoch_coverage.json
+            outputs/e1_100epoch_seeds/*.json
+          if-no-files-found: warn
+          retention-days: 14

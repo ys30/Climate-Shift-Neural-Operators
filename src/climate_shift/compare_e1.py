@@ -70,6 +70,26 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
                 "samples_per_month": train_month_counts,
                 "minimum_required_per_month": 20,
             }
+    # Per-year scores use the same trained model, checkpoint and fixed thresholds;
+    # no test-year-specific fitting or model selection.
+    test_year_indices = np.unique(years[test]).astype(int)
+    yearly_results = {}
+    def _year_score(pred, target, yr):
+        mask = years[test] == yr
+        out = {"n_samples": int(mask.sum()),
+               "unweighted": regression_metrics(pred[mask], target[mask]),
+               "area_weighted": latitude_weighted_metrics(
+                   pred[mask], target[mask], latitude) if latitude is not None else None}
+        if seasonal_tail is not None:
+            out["monthly_local_hot"] = local_monthly_hot_diagnostics(
+                pred[mask], target[mask], target_times[test][mask],
+                train_cutoffs, latitude=latitude)
+        else:
+            out["monthly_local_hot"] = None
+        return out
+    yearly_results["persistence"] = {
+        str(yr): _year_score(x[test], y[test], yr) for yr in test_year_indices
+    }
     diagnostics = {}
     torch.set_num_threads(1)
     for name in ("fno", "unet"):
@@ -107,6 +127,9 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
         with torch.no_grad():
             preds = model(xx[ids[2]]).numpy() * std + mean
         results[name] = regression_metrics(preds, y[test])
+        yearly_results[name] = {
+            str(yr): _year_score(preds, y[test], yr) for yr in test_year_indices
+        }
         tail_results[name] = hot_diagnostics(preds, y[test], threshold, latitude=latitude)
         if latitude is not None:
             weighted_results[name] = latitude_weighted_metrics(preds, y[test], latitude)
@@ -135,6 +158,7 @@ def compare(npz: str | Path, output: str | Path, train_end: int, val_end: int,
                             "modes": modes, "lr": lr},
         "train_target_normalization": {"mean": mean, "std": std},
         "diagnostics": diagnostics, "metrics": results,
+        "per_test_year_metrics": yearly_results,
         "latitude_weighted_metrics": weighted_results,
         "area_weighting_status": "cos(latitude)" if latitude is not None else "missing_latitude_legacy_unweighted",
         "training_reference_p95_threshold": threshold,

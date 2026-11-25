@@ -1,0 +1,83 @@
+name: E1 independent 2012-2014 heldout-year ERA5 (one-time)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-multiyear-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-heldout-years-2012-2014
+  cancel-in-progress: false
+
+jobs:
+  heldout-years:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and test year-specific evaluation
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_heldout_year_metrics.py tests/test_seasonal_e2e.py tests/test_parameter_convergence.py
+      - name: Export seven-year ERA5 reference cohort
+        run: |
+          python scripts/export_wb2_multiyear.py \
+            --years 2008 2009 2010 2011 2012 2013 2014 \
+            --max-per-month 24 --stride 4 \
+            --output data/processed/e1_2008_2014.npz
+          python scripts/check_e1_coverage.py \
+            --input data/processed/e1_2008_2014.npz \
+            --metadata data/processed/e1_2008_2014.json \
+            --years 2008 2009 2010 2011 2012 2013 2014 \
+            --min-per-month 20 \
+            --output outputs/e1_2008_2014_coverage.json
+      - name: Fit three independent seeds with frozen training and heldout years
+        run: |
+          python scripts/run_e1_multiseed.py \
+            --input data/processed/e1_2008_2014.npz \
+            --output-dir outputs/e1_heldout_2012_2014 \
+            --train-end 2010 --val-end 2011 --test-end 2014 \
+            --seeds 11 22 33 --epochs 100 --width 8 --modes 4 \
+            --require-pair-times
+      - name: Assert independent year metrics and no test leakage
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          output=Path("outputs/e1_heldout_2012_2014")
+          summary=json.loads((output/"seed_summary.json").read_text())
+          assert summary["split_isolation"]["status"]=="passed"
+          assert summary["seasonal_local_p95_definition"]["status"]=="available_training_only"
+          for seed in (11,22,33):
+              d=json.loads((output/f"seed_{seed}.json").read_text())
+              assert d["n_samples"]=={"train":864,"validation":288,"test":864}
+              assert d["hyperparameters"]["epochs"]==100
+              assert d["area_weighting_status"]=="cos(latitude)"
+              for model in ("persistence","fno","unet"):
+                  year=d["per_test_year_metrics"][model]
+                  assert set(year)=={"2012","2013","2014"}
+                  for yr in year:
+                      assert year[yr]["n_samples"]==288
+                      assert year[yr]["area_weighted"]["rmse"]>0
+                      assert year[yr]["monthly_local_hot"] is not None
+          print("Verified 2012–2014 independently scored heldout years and full provenance.")
+          PY
+      - name: Archive reproducible diagnostics (no raw ERA5)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-era5-heldout-2012-2014
+          path: |
+            data/processed/e1_2008_2014.json
+            outputs/e1_2008_2014_coverage.json
+            outputs/e1_heldout_2012_2014/*.json
+          retention-days: 14
+          if-no-files-found: warn

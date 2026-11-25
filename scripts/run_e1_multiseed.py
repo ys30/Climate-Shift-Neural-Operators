@@ -10,7 +10,7 @@ from climate_shift.compare_e1 import compare
 def run_seeds(input_path: str, output_dir: str, train_end: int, val_end: int,
               test_end: int, seeds: tuple[int, ...] = (11, 22, 33),
               epochs: int = 4, width: int = 8, modes: int = 4,
-              require_pair_times: bool = False):
+              require_pair_times: bool = False, tail_weight: float = 0.0):
     if len(seeds) < 2 or len(seeds) != len(set(seeds)):
         raise ValueError("Supply at least two unique seeds")
     out = Path(output_dir)
@@ -21,7 +21,8 @@ def run_seeds(input_path: str, output_dir: str, train_end: int, val_end: int,
         reports.append(compare(input_path, out / f"seed_{seed}.json", train_end,
                                val_end, test_end, epochs=epochs,
                                seed=seed, width=width, modes=modes,
-                               require_pair_times=require_pair_times))
+                               require_pair_times=require_pair_times,
+                               tail_weight=tail_weight))
     if require_pair_times and any(r["split_isolation"]["status"] != "passed" for r in reports):
         raise ValueError("Every seed must pass a strict timestamp isolation audit")
     if len({r["input_sha256"] for r in reports}) != 1:
@@ -32,7 +33,7 @@ def run_seeds(input_path: str, output_dir: str, train_end: int, val_end: int,
     summary = {"status": "development only; no scientific inference",
                "input_sha256": reports[0]["input_sha256"],
                "split_isolation": reports[0]["split_isolation"],
-               "seeds": list(seeds), "models": {}}
+               "seeds": list(seeds), "tail_weight": tail_weight, "models": {}}
     for name in ("fno", "unet", "persistence"):
         summary["models"][name] = {}
         for metric in ("mae", "rmse", "bias"):
@@ -154,10 +155,12 @@ def main():
     p.add_argument("--width", type=int, default=8)
     p.add_argument("--modes", type=int, default=4)
     p.add_argument("--require-pair-times", action="store_true")
+    p.add_argument("--tail-weight", type=float, default=0.0)
     a = p.parse_args()
     print(json.dumps(run_seeds(a.input, a.output_dir, a.train_end, a.val_end,
                                a.test_end, tuple(a.seeds), a.epochs, a.width, a.modes,
-                               require_pair_times=a.require_pair_times),
+                               require_pair_times=a.require_pair_times,
+                               tail_weight=a.tail_weight),
                      indent=2))
 
 

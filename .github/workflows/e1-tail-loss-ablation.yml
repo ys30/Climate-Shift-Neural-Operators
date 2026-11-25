@@ -1,0 +1,135 @@
+name: E1 tail-aware vs MSE controlled ERA5 three-seed experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-tail-ablation-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-tail-ablation-v1
+  cancel-in-progress: false
+
+jobs:
+  tail-ablation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and test training-only tail loss
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_tail_weighted_e1.py tests/test_parameter_convergence.py tests/test_multiyear_summary.py
+      - name: Export independent 2012–2014 ERA5 holdouts and prove time coverage
+        run: |
+          python scripts/export_wb2_multiyear.py \
+            --years 2008 2009 2010 2011 2012 2013 2014 \
+            --max-per-month 24 --stride 4 \
+            --output data/processed/e1_tail_ablation_2008_2014.npz
+          python scripts/check_e1_coverage.py \
+            --input data/processed/e1_tail_ablation_2008_2014.npz \
+            --metadata data/processed/e1_tail_ablation_2008_2014.json \
+            --years 2008 2009 2010 2011 2012 2013 2014 \
+            --min-per-month 20 \
+            --output outputs/e1_tail_ablation_coverage.json
+      - name: Control MSE (same 100-epoch budget, three seeds)
+        run: |
+          python scripts/run_e1_multiseed.py \
+            --input data/processed/e1_tail_ablation_2008_2014.npz \
+            --output-dir outputs/e1_tail_control \
+            --train-end 2010 --val-end 2011 --test-end 2014 \
+            --seeds 11 22 33 --epochs 100 --width 8 --modes 4 \
+            --tail-weight 0 --require-pair-times
+      - name: Tail-aware train P95 weighted MSE (weight 3)
+        run: |
+          python scripts/run_e1_multiseed.py \
+            --input data/processed/e1_tail_ablation_2008_2014.npz \
+            --output-dir outputs/e1_tail_weight3 \
+            --train-end 2010 --val-end 2011 --test-end 2014 \
+            --seeds 11 22 33 --epochs 100 --width 8 --modes 4 \
+            --tail-weight 3 --require-pair-times
+      - name: Verify paired results, seasonality, and hot conditional error
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data={}
+          for name,weight in [('control',0),('weight3',3)]:
+              path=Path(f'outputs/e1_tail_{name}')
+              summ=json.loads((path/'seed_summary.json').read_text())
+              assert summ['tail_weight']==weight
+              assert summ['split_isolation']['status']=='passed'
+              assert summ['area_weighting_status'].startswith('cos(latitude)')
+              assert summ['heldout_years']==['2012','2013','2014']
+              data[name]=summ
+              for seed in (11,22,33):
+                  r=json.loads((path/f'seed_{seed}.json').read_text())
+                  assert r['hyperparameters']['tail_weight']==weight
+                  assert r['hyperparameters']['epochs']==100
+                  assert r['conditional_skill_reference']=='train_only_month_local_mean_std'
+                  assert r['seasonal_local_p95_definition']['status']=='available_training_only'
+                  for model in ('fno','unet'):
+                      assert len(r['diagnostics'][model]['history'])==100
+                      assert set(r['per_test_year_anomaly_bin_errors'][model])=={'2012','2013','2014'}
+          assert data['control']['input_sha256']==data['weight3']['input_sha256']
+          comparisons={}
+          for model in ('fno','unet'):
+              control=data['control']['models'][model]
+              treatment=data['weight3']['models'][model]
+              comparisons[model]={
+                  'control_weighted_rmse':control['weighted_rmse'],
+                  'treatment_weighted_rmse':treatment['weighted_rmse'],
+                  'control_local_hot_recall':control['monthly_local_hot_recall'],
+                  'treatment_local_hot_recall':treatment['monthly_local_hot_recall'],
+                  'yearwise':{},
+              }
+              for year in ('2012','2013','2014'):
+                  per={}
+                  for label in ('control','weight3'):
+                      one=[json.loads((Path(f'outputs/e1_tail_{label}')/f'seed_{s}.json').read_text())
+                           for s in (11,22,33)]
+                      per[label]={
+                          'hot_z_gt_2_rmse_K_by_seed':[
+                              r['per_test_year_anomaly_bin_errors'][model][year]['bins']['hot_gt_p2']['weighted_rmse_K']
+                              for r in one
+                          ],
+                          'hot_z_gt_2_bias_K_by_seed':[
+                              r['per_test_year_anomaly_bin_errors'][model][year]['bins']['hot_gt_p2']['weighted_bias_K']
+                              for r in one
+                          ],
+                      }
+                  comparisons[model]['yearwise'][year]=per
+          out={'status':'matched_data_seed_architecture_budget_loss_ablation',
+               'input_sha256':data['control']['input_sha256'],
+               'loss_control':'MSE','loss_treatment':'MSE * (1 + 3 * target_above_train_local_month_P95)',
+               'checkpoint_selection':'lowest unweighted validation MSE, same both arms',
+               'models':comparisons}
+          Path('outputs/e1_tail_ablation_comparison.json').write_text(json.dumps(out,indent=2)+'\n')
+          print(json.dumps({
+              model:{
+                  'control_rmse':row['control_weighted_rmse']['mean'],
+                  'tail_rmse':row['treatment_weighted_rmse']['mean'],
+                  'control_local_recall':row['control_local_hot_recall']['mean'],
+                  'tail_local_recall':row['treatment_local_hot_recall']['mean'],
+              } for model,row in comparisons.items()},indent=2))
+          PY
+      - name: Archive both arms, source audit, full convergence histories
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-era5-tail-mse-ablation-3seed
+          path: |
+            data/processed/e1_tail_ablation_2008_2014.json
+            outputs/e1_tail_ablation_coverage.json
+            outputs/e1_tail_ablation_comparison.json
+            outputs/e1_tail_control/*.json
+            outputs/e1_tail_weight3/*.json
+          retention-days: 14
+          if-no-files-found: warn

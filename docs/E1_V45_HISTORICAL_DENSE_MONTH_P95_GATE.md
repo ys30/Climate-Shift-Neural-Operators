@@ -44,3 +44,19 @@ No SSP245/SSP585 data will be opened or added to the v4.5 Historical NPZ. This c
 - 75 targets per month exceed the technical minimum of 20, but the monthly P95 still has limited tail effective sample size; report this honestly. Grid cells/adjacent dates are not independent climate realization replicates.
 - Climate-scenario projection skill and warming-signal retention are *not yet measured*; do not infer climate-change resilience from Historical-only validation.
 - The daily CMIP6 mean-temperature target cannot be directly compared as an identical task to the existing ERA5 instantaneous +24h prediction.
+
+
+## VERIFIED v4.5 completion and immutable source contract
+
+**End-to-end success:** https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45857281051  
+**Data artifact:** https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45857281051/artifacts/15138645070
+
+The workflow successfully extracted 1,140 real Historical daily `tas(t)→tas(t+1 day)` regional pairs, verified source/target lead and train–validation time isolation, and passed the NPZ strict input round-trip and train-only monthly local P95 fit. Actual train=900 (25 years; 75 per month), Historical val=240 (10 years; 20 per month), shape 26×27, all finite Kelvin. The Historical validation-only Persistence weighted RMSE was **2.3297778468 K**.
+
+**Frozen NPZ SHA256:** `ac0a354032836c5de5463b122d26fad2270fd5ba2ebb48f43074105c8ce7b914`. This exact hash is mandatory for the next training phase and prevents accidental use of SSP data or a changed test cohort.
+
+The separately committed `cftime` dependency corrected prior default CI failures; [default Unit tests](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45857475991) and [synthetic model smoke](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45857476042) both completed successfully.
+
+## v4.6 one-shot Historical-only FNO/U-Net smoke launch (pending outcome)
+
+**Run:** https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45859545722. It downloads that verified v4.5 artifact rather than re-fetching CMIP6 data, rejects a checksum mismatch, fits the two fixed model architectures on Historical training with standard MSE for **two epochs, seed 11**, and saves check-point state dictionaries with frozen normalization and training-only monthly P95 thresholds. Checkpoint choice uses Historical 2005–2014 validation only. No SSP store is opened, and no future-climate forecast or trained SSP metric is claimed unless a future independent evaluation is actually executed. Scientific protocol: [v4.6 blinded fitting](E1_V46_HISTORICAL_FIT_AND_SSP_BLIND_TEST_PROTOCOL.md).

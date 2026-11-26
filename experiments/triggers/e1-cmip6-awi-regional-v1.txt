@@ -1,0 +1,1 @@
+One-time bounded AWI-CM-1-1-MR CMIP6 daily tas region 25–50N,235–260E audit, Historical+SSP245+SSP585. Two predetermined dates per scenario, exact source->target +1 native day, no full arrays beyond regional samples, no model training, no climate skill claims.

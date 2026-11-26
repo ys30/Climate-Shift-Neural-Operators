@@ -1,0 +1,1 @@
+Rerun exactly the same frozen 312 AWI source/target daily pairs after import-only fix. Historical train 1980,1990,2000,2004; validation 2005,2010,2014; SSP245/585 2030,2050,2080; two days/month. Do not change cohort or fit any model to SSP.

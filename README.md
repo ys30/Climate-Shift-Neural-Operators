@@ -237,3 +237,20 @@ New [training-only conditional error decomposition](src/climate_shift/conditiona
 The [successful controlled real ERA5 tail-loss run](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45718431425) used 100 epochs, FNO and U-Net, three paired seeds, and 2012–2014 heldout years. Tail-weight=3 raised mean **monthly local-P95 Recall** for FNO **0.5035→0.5444** and U-Net **0.4575→0.5433**, but reduced **Precision** (**0.6306→0.6089**; **0.6637→0.6142**) and slightly worsened pooled **weighted RMSE** (**2.8586→2.8759 K**; **2.8408→2.8606 K**). The two neural models improved *conditional* z>2 RMSE and signed heat-tail bias in every test year; [full evidence and design limitations](docs/E1_V32_VERIFIED_TAIL_AWARE_MSE_ABLATION.md).
 
 A separately predeclared, smaller training tail-weight=1 (hot multiplier 2) [sensitivity run](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45751577655) has been triggered to examine mean-skill vs recall/precision tradeoffs. This new run is not yet a verified result and its weight is not selected using the test years. Neither result establishes future SSP/CMIP6 climate-shift generalization.
+
+## E1 v3.3–v3.4 — three measured tail-loss weights, fresh-year confirmation
+
+The real ERA5 [tail-weight=1 (2× hot sample) experiment](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45751577655) **succeeded**. Along with the [standard MSE and tail-weight=3 control](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45718431425), the observed 2012–2014 results are:
+
+| Architecture | Hot train multiplier | Weighted RMSE (K) | Train-month-local P95 recall | P95 precision |
+|---|---:|---:|---:|---:|
+| FNO | 1× | **2.8586** | 0.5035 | **0.6306** |
+| FNO | 2× | 2.8727 | 0.5252 | 0.6150 |
+| FNO | 4× | 2.8759 | **0.5444** | 0.6089 |
+| U-Net | 1× | 2.8408 | 0.4575 | **0.6637** |
+| U-Net | 2× | **2.8308** | 0.4764 | 0.6578 |
+| U-Net | 4× | 2.8606 | **0.5433** | 0.6142 |
+
+These are the three-seed means over the same historical heldout years. A small U-Net win at hot multiplier 2 is exploratory; weight 2 was investigated **after** reviewing heldout results at 4×, so it must not be marketed as selected on a fully untouched test cohort. See [complete evidence report](docs/E1_V33_VERIFIED_THREE_WEIGHT_PARETO_RESULTS.md).
+
+A [new independent 2015–2017 historical holdout check](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45754843640) has been launched for **all frozen candidate weights 0/1/3**, with 2008–2010 train, 2011 validation, three seeds and 100 epochs unchanged. No numerical claims about the new years until the run succeeds. Even successful future *historical years* cannot stand in for actual CMIP6/SSP climate-shift evaluation.

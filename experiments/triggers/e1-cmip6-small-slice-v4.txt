@@ -1,0 +1,1 @@
+One-time rerun of strict CMIP6 small temperature-slice audit. Preserve ACCESS-CM2 SSP585 2201–2300 in diagnostic but reject as 2015–2100 candidate; AWI-CM-1-1-MR covers Historical and both SSPs. Correct only downstream audit-year assertion; no relaxations to compatibility gate or training.

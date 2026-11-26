@@ -1,0 +1,1 @@
+E1 v5.12: historical-only immutable AWI/BCC FNO/U-Net checkpoints on audited new 2040 native daily SSP dates. No SSP fitting.

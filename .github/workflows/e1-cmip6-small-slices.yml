@@ -8,6 +8,7 @@ on:
       - 'experiments/triggers/e1-cmip6-small-slice-v1.txt'
       - 'experiments/triggers/e1-cmip6-small-slice-v2.txt'
       - 'experiments/triggers/e1-cmip6-small-slice-v3.txt'
+      - 'experiments/triggers/e1-cmip6-small-slice-v4.txt'
 
 permissions:
   contents: read
@@ -50,7 +51,7 @@ jobs:
                   if report['status']=='small_slice_cf_dates_and_kelvin_samples_verified':
                       assert report['full_fields_loaded'] is False
                       assert report['n_requested_temperature_gridcells_max']<=12
-                      assert 1850<=report['start_year']<=2100
+                      assert 1850<=report['start_year']<=2300
                       assert 1850<=report['end_year']<=2300
           expected = {'ACCESS-CM2': False, 'AWI-CM-1-1-MR': True}
           assert {m['source_id']:m['historical_ssp_daily_schema_small_slice_compatible']

@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'experiments/triggers/e1-cmip6-awi-multiyear-v1.txt'
+      - 'experiments/triggers/e1-cmip6-awi-multiyear-v2.txt'
 
 permissions:
   contents: read

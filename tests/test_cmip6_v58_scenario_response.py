@@ -1,7 +1,7 @@
 """E1 v5.8 SSP scenario difference bias identity and guards."""
 import pytest
 from scripts.evaluate_cmip6_v58_scenario_response import summarize
-from tests.test_cmip6_v57_sampled_change import sample
+from test_cmip6_v57_sampled_change import sample
 
 def test_complete_scenario_response():
     a,b=sample()

@@ -7,6 +7,7 @@ on:
     paths:
       - 'experiments/triggers/e1-cmip6-small-slice-v1.txt'
       - 'experiments/triggers/e1-cmip6-small-slice-v2.txt'
+      - 'experiments/triggers/e1-cmip6-small-slice-v3.txt'
 
 permissions:
   contents: read
@@ -50,8 +51,12 @@ jobs:
                       assert report['full_fields_loaded'] is False
                       assert report['n_requested_temperature_gridcells_max']<=12
                       assert 1850<=report['start_year']<=2100
-                      assert 1850<=report['end_year']<=2200
-          print('CMIP6 native date/tiny-slice results recorded without inventing compatibility.')
+                      assert 1850<=report['end_year']<=2300
+          expected = {'ACCESS-CM2': False, 'AWI-CM-1-1-MR': True}
+          assert {m['source_id']:m['historical_ssp_daily_schema_small_slice_compatible']
+                  for m in d['models']}==expected
+          assert d['compatible_trios']==1
+          print('Strict 2015–2100 gate verified: ACCESS extension excluded; AWI eligible.')
           PY
       - name: Archive bounded audit metadata and small temperature statistics only
         if: always()

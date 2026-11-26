@@ -1,0 +1,80 @@
+name: E1 AWI CMIP6 v4.7 frozen Historical 3-seed 3-tail-weight validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v47-historical-arms-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v47-historical-full-locked
+  cancel-in-progress: false
+
+jobs:
+  historical-frozen-arm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        tail_weight: [0, 1, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned-bound-compatible model/runtime and run frozen cohort tests
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_historical_fit_gate.py tests/test_cmip6_v47_historical_arms.py
+      - name: Reuse VERIFIED Historical-only 1980–2014 data artifact; no future SSP fetch
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v45-awi-historical-only-training-data
+          run-id: 45857281051
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/processed
+      - name: Frozen 100-epoch Historical-only FNO/U-Net seed 11/22/33 per candidate arm
+        run: |
+          python scripts/run_cmip6_v47_historical_arms.py \
+            --input data/processed/e1_cmip6_v45_awi_historical.npz \
+            --output-dir outputs/e1_cmip6_v47_weight_${{ matrix.tail_weight }} \
+            --tail-weight ${{ matrix.tail_weight }}
+      - name: Audit three complete seeds and checkpoint data hashes
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          import numpy as np
+          weight=${{ matrix.tail_weight }}
+          p=Path(f'outputs/e1_cmip6_v47_weight_{weight}')
+          r=json.loads((p/'arm_summary.json').read_text())
+          assert r['status']=='frozen_cmip6_historical_validation_only_no_ssp_evaluation'
+          assert r['seed_ids']==[11,22,33]
+          assert r['epochs']==100 and r['tail_weight']==weight
+          assert r['data_sha256']=='ac0a354032836c5de5463b122d26fad2270fd5ba2ebb48f43074105c8ce7b914'
+          assert r['ssp_data_read'] is False
+          assert set(r['models'])=={'fno','unet'}
+          for m in r['models'].values():
+              for key in ('weighted_rmse_K','local_p95_recall','local_p95_precision'):
+                  assert len(m[key]['individual'])==3
+                  assert all(np.isfinite(v) for v in m[key]['individual'])
+              for c in m['checkpoints']:
+                  chk=p/c['file']
+                  assert chk.is_file()
+                  assert hashlib.sha256(chk.read_bytes()).hexdigest()==c['sha256']
+          print('Historical validation-only three seed arm complete; SSP remains unseen.')
+          PY
+      - name: Archive all FNO/U-Net checkpoints and validation diagnostics for this arm
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-${{ matrix.tail_weight }}
+          path: outputs/e1_cmip6_v47_weight_${{ matrix.tail_weight }}/
+          if-no-files-found: warn
+          retention-days: 30

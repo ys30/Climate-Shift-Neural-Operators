@@ -1,0 +1,55 @@
+name: E1 v5.11 independent 2040 native GCM source pilot
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v511-2040-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-cmip6-v511-2040-pilot
+  cancel-in-progress: false
+
+jobs:
+  source-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install native CMIP6 source dependencies and run source guard tests
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v511_new_2040_cohort.py
+      - name: Read four untouched 2040 GCM/SSP native source cohorts
+        run: |
+          python -m scripts.audit_cmip6_v511_new_2040_cohort \
+            --awi-manifest experiments/cmip6_v40_first_two_catalog_triples.json \
+            --bcc-manifest experiments/cmip6_v49_bcc_candidate_catalog.json \
+            --output outputs/e1_cmip6_v511_2040_native_cohorts.json
+      - name: Require 4 native source cohorts and 336 unique sampled day pairs
+        run: |
+          python - <<'PY'
+          import json,math
+          from scripts.audit_cmip6_v511_new_2040_cohort import validate_records
+          d=json.load(open("outputs/e1_cmip6_v511_2040_native_cohorts.json"))
+          assert d["source_only"] is True
+          assert validate_records(d["rows"])
+          assert len(d["rows"])==4
+          assert sum(r["n_pairs"] for r in d["rows"])==336
+          assert all(math.isfinite(r["mean_target_regional_K"]) for r in d["rows"])
+          print("Verified 336 source/target pairs in 2040 new sparse calendar cohort")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v511-new-2040-native-CMIP6-source-cohorts
+          path: outputs/e1_cmip6_v511_2040_native_cohorts.json
+          retention-days: 30
+          if-no-files-found: warn

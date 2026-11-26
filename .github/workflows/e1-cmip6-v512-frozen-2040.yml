@@ -1,0 +1,142 @@
+name: E1 v5.12 frozen 36 checkpoints on new 2040 CMIP6 dates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v512-2040-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v512-frozen-2040
+  cancel-in-progress: false
+
+jobs:
+  frozen-2040:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test immutable pilot and calendar safeguards
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v512_frozen_2040.py tests/test_cmip6_v511_new_2040_cohort.py
+      - name: Recover frozen AWI historical-only data
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v45-awi-historical-only-training-data
+          run-id: 45857281051
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/awi
+      - name: Recover frozen BCC historical-only data
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v51-bcc-historical-noleap-training-cohort
+          run-id: 45868844059
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/bcc
+      - name: Recover AWI weight-0 trained checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-0
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/awi/weight_0
+      - name: Recover AWI weight-1 trained checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-1
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/awi/weight_1
+      - name: Recover AWI weight-3 trained checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-3
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/awi/weight_3
+      - name: Recover BCC weight-0 trained checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-0
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/bcc/weight_0
+      - name: Recover BCC weight-1 trained checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-1
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/bcc/weight_1
+      - name: Recover BCC weight-3 trained checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-3
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/bcc/weight_3
+      - name: Recover independently verified v5.11 2040 pilot
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v511-new-2040-native-CMIP6-source-cohorts
+          run-id: 45893094787
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/pilot
+      - name: Verify all 36 original Historical-only checkpoints BEFORE any future read
+        run: |
+          python - <<'PY'
+          from scripts.evaluate_cmip6_v512_new_2040_frozen import verify_frozen,verify_pilot
+          frozen=verify_frozen("data/awi/e1_cmip6_v45_awi_historical.npz",
+            "data/bcc/e1_cmip6_v51_bcc_historical.npz","frozen/awi","frozen/bcc")
+          assert len(frozen["AWI"]["models"])==18 and len(frozen["BCC"]["checkpoints"])==18
+          p=verify_pilot("data/pilot/e1_cmip6_v511_2040_native_cohorts.json")
+          assert len(p)==4
+          print("All 36 historical-fitted model checkpoints plus independent 2040 source-date records verified")
+          PY
+      - name: Evaluate native 2040 +1 day neural forecasts with frozen weights only
+        run: |
+          python -m scripts.evaluate_cmip6_v512_new_2040_frozen \
+            --awi-hist data/awi/e1_cmip6_v45_awi_historical.npz \
+            --bcc-hist data/bcc/e1_cmip6_v51_bcc_historical.npz \
+            --awi-arms frozen/awi \
+            --bcc-arms frozen/bcc \
+            --awi-manifest experiments/cmip6_v40_first_two_catalog_triples.json \
+            --bcc-manifest experiments/cmip6_v49_bcc_candidate_catalog.json \
+            --pilot-json data/pilot/e1_cmip6_v511_2040_native_cohorts.json \
+            --output outputs/e1_cmip6_v512_frozen_2040.json
+      - name: Require all four source/scenario groups, each with 84 forecast pairs and all 18 neural runs
+        run: |
+          python - <<'PY'
+          import json,math
+          d=json.load(open("outputs/e1_cmip6_v512_frozen_2040.json"))
+          assert d["status"]=="v512_frozen_historical_neural_forecasts_new_2040_cohort"
+          assert d["frozen_training"] is True and d["checkpoint_selection_using_2040"] is False
+          assert len(d["rows"])==4 and {(r["gcm"],r["ssp"]) for r in d["rows"]}=={
+            ("AWI","ssp245"),("AWI","ssp585"),("BCC","ssp245"),("BCC","ssp585")}
+          for r in d["rows"]:
+            assert r["n_pairs"]==84 and len(r["models"])==7
+            for name,x in r["models"].items():
+              if name=="persistence":
+                assert math.isfinite(x["rmse_K"])
+              else:
+                assert len(x["rmse_K"]["individual"])==3
+                assert len(x["p95_recall"]["individual"])==3
+                assert all(math.isfinite(z) for z in x["rmse_K"]["individual"])
+          print("Verified four 2040 scenario scores with 18 frozen neural checkpoint evaluations each")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v512-frozen-2040-cmip6-neural-scores
+          path: outputs/e1_cmip6_v512_frozen_2040.json
+          retention-days: 30
+          if-no-files-found: warn

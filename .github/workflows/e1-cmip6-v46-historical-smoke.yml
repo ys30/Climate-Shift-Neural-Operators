@@ -1,0 +1,87 @@
+name: E1 AWI CMIP6 v4.6 Historical-only FNO and U-Net checkpoint smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v46-historical-smoke-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v46-historical-only-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact package dependencies and run safety tests
+        run: |
+          python -m pip install -e '.[test,torch,era5]' 
+          python -m pytest tests/test_cmip6_historical_fit_gate.py tests/test_cmip6_v45_historical_export.py
+      - name: Reuse v4.5 previously VERIFIED immutable Historical-only data; no CMIP6 re-fetch
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v45-awi-historical-only-training-data
+          run-id: 45857281051
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/processed
+      - name: Freeze historical artifact checksum and enforce no future SSP target
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          p=Path('data/processed/e1_cmip6_v45_awi_historical.npz')
+          m=json.loads(p.with_suffix('.json').read_text())
+          h=hashlib.sha256(p.read_bytes()).hexdigest()
+          assert h=='ac0a354032836c5de5463b122d26fad2270fd5ba2ebb48f43074105c8ce7b914'
+          assert h==m['dataset_sha256']
+          assert m['NPZ_contains_only_historical'] and not m['ssp_test_data_read']
+          assert m['sample_count']=={'train':900,'validation':240,'total':1140}
+          PY
+      - name: Run two-epoch fixed-seed FNO and U-Net MSE smoke with saved immutable checkpoints
+        run: |
+          python scripts/fit_cmip6_awi_historical.py \
+            --input data/processed/e1_cmip6_v45_awi_historical.npz \
+            --output-dir outputs/e1_cmip6_v46_historical_smoke \
+            --seed 11 --epochs 2 --tail-weight 0
+      - name: Check reported training-only model outputs and checkpoint hashes
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          import numpy as np
+          p=Path('outputs/e1_cmip6_v46_historical_smoke')
+          s=json.loads((p/'historical_fit_summary.json').read_text())
+          assert s['status']=='historical_only_checkpoint_fit_no_SSP_or_future_forecast'
+          assert s['ssp_data_read'] is False
+          assert (s['train_count'],s['validation_count'])==(900,240)
+          assert s['epochs']==2 and s['tail_weight']==0
+          assert set(s['models'])=={'fno','unet'}
+          assert set(s['local_p95_reference']['actual_samples_per_month'].values())=={75}
+          for name,model in s['models'].items():
+              assert model['parameter_count']>0
+              assert model['best_epoch'] in (1,2)
+              assert len(model['history'])==2
+              assert np.isfinite(model['validation_weighted']['rmse'])
+              chk=p/model['checkpoint']
+              assert chk.exists() and hashlib.sha256(chk.read_bytes()).hexdigest()==model['checkpoint_sha256']
+          print('Historically fitted, immutable checkpoint and source hashes verified.')
+          PY
+      - name: Archive Historical-only smoke results and locked checkpoints (no SSP data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-cmip6-v46-awi-fno-unet-historical-smoke
+          path: outputs/e1_cmip6_v46_historical_smoke/
+          retention-days: 30
+          if-no-files-found: warn

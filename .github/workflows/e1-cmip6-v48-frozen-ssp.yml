@@ -1,0 +1,111 @@
+name: E1 AWI CMIP6 v4.8 frozen Historical-to-SSP blind forecast
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v48-frozen-ssp-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v48-frozen-ssp-once
+  cancel-in-progress: false
+
+jobs:
+  blind-ssp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install model/source dependencies and validate no-SSP training gates
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v48_frozen_ssp.py tests/test_cmip6_historical_fit_gate.py tests/test_cmip6_v47_historical_arms.py
+      - name: Recover exact verified Historical-only data and 3 frozen loss-arm checkpoint archives
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v45-awi-historical-only-training-data
+          run-id: 45857281051
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/processed
+      - name: Recover no-tail Historical model checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-0
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: outputs/frozen/weight_0
+      - name: Recover moderate-tail Historical model checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-1
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: outputs/frozen/weight_1
+      - name: Recover strong-tail Historical model checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-3
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: outputs/frozen/weight_3
+      - name: Verify ALL Historical checkpoints and training-only P95 before any SSP field is accessed
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          from scripts.evaluate_cmip6_v48_frozen_ssp import read_frozen_checkpoints
+          source=Path('data/processed/e1_cmip6_v45_awi_historical.npz')
+          d=read_frozen_checkpoints(Path('outputs/frozen'),source)
+          assert len(d['models'])==18
+          assert len(set(d['checkpoint_sha256_by_arm'].values()))==18
+          assert d['local_p95'].shape==(12,26,27)
+          print('All 18 immutable source-fitted checkpoints passed before SSP read')
+          PY
+      - name: Evaluate ALL fixed FNO/U-Net models once on native AWI SSP245 and SSP585 2030/2050/2080
+        run: |
+          python scripts/evaluate_cmip6_v48_frozen_ssp.py \
+            --historical data/processed/e1_cmip6_v45_awi_historical.npz \
+            --arm-dir outputs/frozen \
+            --manifest experiments/cmip6_v40_first_two_catalog_triples.json \
+            --output outputs/e1_cmip6_v48_frozen_ssp_evaluation.json
+      - name: Enforce two-scenario, three-year, three-seed and all-tail weight output completeness
+        run: |
+          python - <<'PY'
+          import json, math
+          from pathlib import Path
+          d=json.loads(Path('outputs/e1_cmip6_v48_frozen_ssp_evaluation.json').read_text())
+          assert d['status']=='first_frozen_historical_to_sparse_SSP_forecast_evaluation'
+          assert d['ssp_used_for_fitting_or_selection'] is False
+          assert len(d['checkpoint_sha256'])==18
+          assert set(d['scenarios'])=={'ssp245','ssp585'}
+          for scenario,data in d['scenarios'].items():
+              assert set(data['groups'])=={'all','2030','2050','2080'}
+              assert data['groups']['all']['n_pairs']==72
+              for year in ('2030','2050','2080'):
+                  assert data['groups'][year]['n_pairs']==24
+              for scope,group in data['groups'].items():
+                  assert set(group['models'])=={'fno','unet'}
+                  for name in ('fno','unet'):
+                      assert set(group['models'][name])=={'0','1','3'}
+                      for weight,metrics in group['models'][name].items():
+                          for key in ('weighted_rmse_K','local_p95_recall','local_p95_precision'):
+                              assert len(metrics[key]['individual'])==3
+                              assert all(math.isfinite(x) for x in metrics[key]['individual'])
+          print('All SSP reports complete; checkpoints were never trained/tuned using SSP')
+          PY
+      - name: Archive only evaluation metrics and frozen-checkpoint provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-cmip6-v48-first-frozen-ssp-sparse-evaluation
+          path: outputs/e1_cmip6_v48_frozen_ssp_evaluation.json
+          retention-days: 30
+          if-no-files-found: warn

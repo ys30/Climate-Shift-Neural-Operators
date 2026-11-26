@@ -337,3 +337,21 @@ The [v4.7 fixed Historical-only experiment](https://github.com/ys30/Climate-Shif
 The [full 100-epoch, 3-seed × 3-weight AWI-CMIP6 Historical FNO/U-Net workflow](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45861178303) **succeeded for all three loss arms**, producing **18 saved checksum-verified checkpoints**. Historical 2005–2014 *validation* RMSE (K, three-seed mean) was **FNO 2.0343 / 2.0393 / 2.0500** and **U-Net 2.0486 / 2.0487 / 2.0540** for training hot multipliers **1× / 2× / 4×**, versus **Persistence 2.3298**. FNO local train-based monthly P95 Recall **0.5512 / 0.5538 / 0.5915**; U-Net **0.5286 / 0.5149 / 0.5531**. These Historical results are not SSP forecasts and use the same validation set for checkpoint selection; they cannot be described as an untouched climate-shift test. [Exact three-seed Historical result table, source hashes and limitations](docs/E1_V48_FROZEN_SSP_FIRST_EVALUATION_PROTOCOL.md).
 
 The [v4.8 one-time SSP245/SSP585 no-refit evaluation](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45864317174) has started. It loads **all 18 frozen** Historical models, first verifies their source dataset and checkpoint hashes, then evaluates the previously fixed **2030/2050/2080, days 8/20 monthly** schedule (72 pairs per scenario) on real AWI native daily mean temperature projections. It uses **only Historical training** for normalization and local monthly P95; no SSP target fitting or future model selection. **No future SSP metrics should be claimed until the v4.8 workflow and archived report actually pass.** Results are sparse simulated scenario target comparisons, not independently observed future weather or heatwave duration tests.
+
+## E1 v4.8 — first **verified** frozen Historical → SSP245 / SSP585 neural evaluation
+
+The [complete first v4.8 CMIP6 future-simulation test workflow](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45864317174) **succeeded**, with exact pre-SSP checks of **all 18 immutable v4.7 Historical-only checkpoints**, source SHA256, training-only normalization and grid-local monthly P95. Frozen weights were applied to native AWI-CM-1-1-MR `day/tas` future projections in **SSP245 and SSP585**, on predeclared 2030/2050/2080 dates (8th/20th each month, 72 forecast pairs/scenario). **No SSP training, tuning or re-selection took place.**
+
+| Predictor | Hot train multiplier | SSP245 weighted RMSE K | SSP585 weighted RMSE K | SSP245 local P95 Recall | SSP585 local P95 Recall |
+|---|---:|---:|---:|---:|---:|
+| Persistence | — | 2.1711 | 2.1188 | 0.7286 | 0.7962 |
+| FNO | 1× | **1.9323** | **1.8836** | 0.679 | 0.763 |
+| FNO | 2× | 1.9409 | 1.8889 | 0.681 | 0.764 |
+| FNO | 4× | 1.9599 | 1.9049 | **0.708** | **0.786** |
+| U-Net | 1× | **1.9552** | 2.0180 | 0.611 | 0.628 |
+| U-Net | 2× | 1.9625 | **2.0087** | 0.624 | 0.641 |
+| U-Net | 4× | 1.9635 | 2.0187 | **0.651** | **0.663** |
+
+Three training-initialization seeds are included in each neural mean. FNO standard-MSE RMSE is about **11%** below Persistence in each sampled SSP. Strong high-tail weighting raises Recall but also raises RMSE; Persistence remains higher on hot Recall than the neural models. Fixed Historical training-month P95 exceedance fraction grows with projected scenario/year (SSP585: 2030 **14.9%**, 2080 **49.2%** of sampled gridcell-days). This is a simulated threshold exceedance, **not a heatwave frequency or duration measure**.
+
+**[Full verified annual results, calibration tradeoffs and scientific caveats](docs/E1_V48_VERIFIED_FROZEN_SSP245_SSP585_RESULTS.md)**; [unaltered Actions result artifact](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45864317174/artifacts/15140346151). The study uses only one model member and two days/month in three future years; SSP data were previously seen in source QA but **never used to fit or select predictors**. Simulated CMIP6 future temperatures are not independently observed future truth. Broader CMIP6-member and denser temporal holdouts remain necessary before strong future-climate generalization claims.

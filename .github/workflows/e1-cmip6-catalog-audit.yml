@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'experiments/triggers/e1-cmip6-catalog-v1.txt'
+      - 'experiments/triggers/e1-cmip6-catalog-v2.txt'
 
 permissions:
   contents: read

@@ -1,0 +1,1 @@
+One-time v4.6 no-SSP-data model training smoke: reuse immutable successful v4.5 AWI Historical-only NPZ (SHA256 ac0a354032836c5de5463b122d26fad2270fd5ba2ebb48f43074105c8ce7b914), fit FNO and U-Net seed11 with standard MSE for 2 epochs and assess 2005–2014 Historical validation only. Freeze saved checkpoints; do not load future SSP or claim future-climate skill.

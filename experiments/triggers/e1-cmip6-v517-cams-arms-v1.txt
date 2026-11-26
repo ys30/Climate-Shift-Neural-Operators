@@ -1,0 +1,1 @@
+E1 v5.17 CAMS Historical-only independent 100-epoch 3 seeds x 3 hot weights x FNO/U-Net training. Prerequisite v5.16 run 45900398047 completed success with 1140 native training/validation forecast pairs; no SSP access.

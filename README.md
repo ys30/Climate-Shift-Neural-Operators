@@ -254,3 +254,18 @@ The real ERA5 [tail-weight=1 (2× hot sample) experiment](https://github.com/ys3
 These are the three-seed means over the same historical heldout years. A small U-Net win at hot multiplier 2 is exploratory; weight 2 was investigated **after** reviewing heldout results at 4×, so it must not be marketed as selected on a fully untouched test cohort. See [complete evidence report](docs/E1_V33_VERIFIED_THREE_WEIGHT_PARETO_RESULTS.md).
 
 A [new independent 2015–2017 historical holdout check](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45754843640) has been launched for **all frozen candidate weights 0/1/3**, with 2008–2010 train, 2011 validation, three seeds and 100 epochs unchanged. No numerical claims about the new years until the run succeeds. Even successful future *historical years* cannot stand in for actual CMIP6/SSP climate-shift evaluation.
+
+## E1 v3.4 — *successful* independent 2015–2017 historical holdout
+
+The **[new-year ERA5 three-arm run succeeded](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/45754843640)** (100 epochs, three seeds, 2008–10 train, 2011 validation, previously unused **2015–17** historical holdout). Model settings, loss candidates and seed IDs were fixed before running these years. This corroborates an **exploratory U-Net modest tail-weight=1 (2× hot training samples) mean/tail improvement**, but not full Precision–Recall dominance.
+
+| Model | Hot training sample multiplier | New-year weighted RMSE K | Monthly grid-local P95 recall | P95 precision |
+|---|---:|---:|---:|---:|
+| FNO | 1× | **2.7952** | 0.5625 | **0.6993** |
+| FNO | 2× | 2.7988 | 0.5983 | 0.6866 |
+| FNO | 4× | 2.8049 | **0.6159** | 0.6822 |
+| U-Net | 1× | 2.7956 | 0.5041 | **0.7417** |
+| U-Net | 2× | **2.7713** | 0.5196 | 0.7374 |
+| U-Net | 4× | 2.8138 | **0.6004** | 0.6955 |
+
+For U-Net at 2×, all three training seeds reduce RMSE relative to MSE; local P95 Recall rises *on average*, but not for every individual seed. In every heldout year 2015–2017, *conditional observed z>2* hot-gridcell RMSE improves relative to MSE. Full numerics, provenance and limitations: [v3.4 independently confirmed historical-year result](docs/E1_V34_FRESH_2015_2017_THREE_ARM_CONFIRMATION.md). **Historical-year validation must not be described as future climate-change or SSP generalization.** Candidate testing on 2015–17 is now closed; future design changes require a further independent test domain.

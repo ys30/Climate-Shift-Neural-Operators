@@ -1,0 +1,1 @@
+One-time CMIP6 v4.2 public Zarr calendar and tiny data read: verify two matched model/member grid trios Historical, ssp245, ssp585, decode CF calendar dates and read only 3 time points x up to 2x2 cells per store. No model training, no full climate grids, and no future skill claim.

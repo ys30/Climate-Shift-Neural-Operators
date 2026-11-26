@@ -1,0 +1,79 @@
+name: E1 v5.5 compare AWI and BCC frozen SSP evaluations
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v55-cross-gcm-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v55-cross-gcm-once
+  cancel-in-progress: false
+
+jobs:
+  contrast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run guard tests to prevent pseudoreplication and changed SSP dates
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v55_cross_gcm.py
+      - name: Download verified AWI v4.8 SSP scoring
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v48-first-frozen-ssp-sparse-evaluation
+          run-id: 45864317174
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/awi
+      - name: Download verified BCC v5.4 SSP scoring
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v54-bcc-first-frozen-ssp-results
+          run-id: 45872811683
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/bcc
+      - name: Compare within-source SSP FNO/U-Net weights relative to native Persistence
+        run: |
+          python scripts/compare_cmip6_v55_awi_bcc.py \
+            --awi inputs/awi/e1_cmip6_v48_frozen_ssp_evaluation.json \
+            --bcc inputs/bcc/e1_cmip6_v54_bcc_frozen_ssp.json \
+            --output outputs/e1_cmip6_v55_cross_gcm_contrasts.json
+      - name: Require complete model/scenario/year and normalized contrasts
+        run: |
+          python - <<'PY'
+          import json,math
+          from pathlib import Path
+          d=json.loads(Path('outputs/e1_cmip6_v55_cross_gcm_contrasts.json').read_text())
+          assert d['status']=='paired_within_GCM_projected_temperature_forecast_contrasts_no_pooled_significance'
+          assert len(d['rows'])==96
+          for item in d['rows']:
+              assert item['source_gcm'] in ('AWI','BCC')
+              assert item['ssp'] in ('ssp245','ssp585')
+              assert item['scope'] in ('all','2030','2050','2080')
+              assert item['model'] in ('fno','unet')
+              assert item['training_hot_multiplier'] in (1,2,4)
+              for k in ('weighted_rmse_K','persistence_weighted_rmse_K',
+                        'rmse_improvement_fraction_vs_own_persistence',
+                        'local_p95_recall','persistence_local_p95_recall',
+                        'recall_delta_vs_own_persistence','local_p95_precision'):
+                  assert math.isfinite(item[k])
+          print('Verified 96 within-source contrasts; no pooled-GCM pseudo-replication')
+          PY
+      - name: Archive only source-matched AWI/BCC SSP contrasts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-v55-cross-gcm-awi-bcc-scenario-contrasts
+          path: outputs/e1_cmip6_v55_cross_gcm_contrasts.json
+          retention-days: 30
+          if-no-files-found: warn

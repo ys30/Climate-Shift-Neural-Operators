@@ -1,0 +1,55 @@
+name: E1 v5.14 third GCM genuine native CMIP6 eligibility preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v514-third-gcm-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-cmip6-v514-third-gcm-preflight
+  cancel-in-progress: false
+
+jobs:
+  catalog-and-native-slice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install source libs and unit tests
+        run: |
+          python -m pip install -e '.[test,era5]'
+          python -m pytest tests/test_cmip6_v514_third_gcm_candidates.py
+      - name: Discover actual third and fourth native CMIP6 GCM source triples
+        run: |
+          python -m scripts.audit_cmip6_v514_third_gcm_candidates \
+            --max-models 2 \
+            --output outputs/e1_cmip6_v514_third_gcm_real_source_audit.json
+      - name: Ensure audit output is complete and distinguishes ineligible model years
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('outputs/e1_cmip6_v514_third_gcm_real_source_audit.json'))
+          assert d['status']=='v514_candidate_third_GCM_native_daily_source_small_slice_eligibility'
+          assert len(d['models'])==2
+          assert all(set(m['experiments'])=={'historical','ssp245','ssp585'} for m in d['models'])
+          assert all(m['source_id'] not in {'AWI-CM-1-1-MR','BCC-CSM2-MR','ACCESS-CM2'} for m in d['models'])
+          for m in d['models']:
+              print(m['source_id'],'verified eligible:',m['passed_small_slice_time_and_geometry_gate'],
+                    'rejections:',m['failed_conditions'])
+          print('Source-only third-model feasibility audit complete; no training claimed')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v514-real-third-gcm-native-calendar-and-tiny-slice-audit
+          path: outputs/e1_cmip6_v514_third_gcm_real_source_audit.json
+          retention-days: 30
+          if-no-files-found: warn

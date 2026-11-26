@@ -6,8 +6,10 @@ def _manifest():
     d={"status":"catalog_metadata_only_no_climate_fields_or_transfer_skill",
        "variables":["tas"],"table_id":"day","catalog_sha256":"abc",
        "selected_candidates":[]}
-    d["selected_candidates"]=[{"source_id":"A","member_id":"r1","grid_label":"gn",
-      e:{"store":"gs://cmip6/model/"+e} for e in ("historical","ssp245","ssp585")}]
+    entry={"source_id":"A","member_id":"r1","grid_label":"gn"}
+    entry.update({e:{"store":"gs://cmip6/model/"+e}
+                  for e in ("historical","ssp245","ssp585")})
+    d["selected_candidates"]=[entry]
     return d
 
 

@@ -40,6 +40,19 @@ def test_missing_future_store_fails_closed(monkeypatch):
     assert report["compatible_trios"]==0
 
 
+def test_ssp_store_begins_2201_cannot_pose_as_2015_2100(monkeypatch):
+    def late_extension(store):
+        out=ok(store)
+        if store.endswith("/ssp585"):
+            out["start_year"]=2201
+            out["end_year"]=2300
+        return out
+    monkeypatch.setattr("scripts.audit_cmip6_small_slices.audit_store",late_extension)
+    result=audit_manifest(manifest(),1)
+    assert result["compatible_trios"]==0
+    assert not result["models"][0]["historical_ssp_daily_schema_small_slice_compatible"]
+
+
 def test_future_ends_before_historical_is_invalid(monkeypatch):
     def bad_dates(store):
         out=ok(store)

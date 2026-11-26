@@ -9,7 +9,10 @@ import argparse
 import json
 from pathlib import Path
 
-from probe_cmip6_zarr import inspect_store
+try:
+    from .probe_cmip6_zarr import inspect_store
+except ImportError:  # standalone CLI: python scripts/audit_cmip6_small_slices.py
+    from probe_cmip6_zarr import inspect_store
 
 
 def audit_store(store: str) -> dict:

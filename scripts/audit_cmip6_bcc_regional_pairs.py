@@ -8,7 +8,10 @@ import argparse
 import json
 from pathlib import Path
 
-from audit_cmip6_awi_daily_pairs import contiguous_span, exact_daily_pair_indices
+try:
+    from .audit_cmip6_awi_daily_pairs import contiguous_span, exact_daily_pair_indices
+except ImportError:
+    from audit_cmip6_awi_daily_pairs import contiguous_span, exact_daily_pair_indices
 
 DATES = {
     "historical": ((2010, 1, 15), (2010, 7, 15)),

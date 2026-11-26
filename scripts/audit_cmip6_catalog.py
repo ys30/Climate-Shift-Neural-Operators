@@ -26,7 +26,7 @@ FREQUENCY = "day"
 
 
 def read_catalog(url: str = CATALOG_URL, timeout: int = 50,
-                 max_bytes: int = 35_000_000) -> tuple[list[dict], str]:
+                 max_bytes: int = 160_000_000) -> tuple[list[dict], str]:
     """Read only small CSV metadata; fail closed on oversized/unavailable sources."""
     if max_bytes < 1000:
         raise ValueError("Metadata byte limit too low")

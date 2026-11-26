@@ -1,0 +1,71 @@
+name: E1 v5.16 CAMS Historical-only native source train/validation data
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v516-cams-historical-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v516-cams-historical
+  cancel-in-progress: false
+
+jobs:
+  historical-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Historical-only schedule and no-SSP training tests
+        run: |
+          python -m pip install -e '.[test,era5]'
+          python -m pytest tests/test_cmip6_v516_cams_historical.py tests/test_cmip6_bcc_v51_historical.py
+      - name: Retrieve audited and frozen v5.15 native CAMS source provenance
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v515-CAMS-actual-native-regional-SSP-daily-pairs
+          run-id: 45898911977
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs
+      - name: Read CAMS Historical ONLY with exact native calendar and grid
+        run: |
+          python -m scripts.export_cmip6_v516_cams_historical \
+            --v515 inputs/e1_cmip6_v515_cams_native_regional_pairs.json \
+            --output data/processed/e1_cmip6_v516_cams_historical.npz
+      - name: Verify 900 training and 240 validation pairs without future data
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json,numpy as np
+          from scripts.export_cmip6_v516_cams_historical import verify_npz,STATUS
+          p=Path("data/processed/e1_cmip6_v516_cams_historical.npz")
+          r=json.loads(p.with_suffix(".json").read_text())
+          assert r["status"]==STATUS and r["train_pairs"]==900 and r["validation_pairs"]==240
+          assert r["ssp_data_opened"] is False and r["model_trained"] is False
+          assert r["train_only_monthly_p95"] is True
+          assert r["independent_CAMS_scalers_required"] is True
+          assert r["npz_sha256"]==hashlib.sha256(p.read_bytes()).hexdigest()
+          shape=tuple(r["native_grid_shape"])
+          verify_npz(p,shape)
+          with np.load(p,allow_pickle=False) as d:
+              assert d["X"].shape==(1140,1,*shape)
+              assert d["monthly_train_p95_K"].shape==(12,*shape)
+          print("Verified native CAMS Historical-only 1980-2014 and P95:",r["npz_sha256"])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v516-cams-native-historical-only-training-data
+          path: |
+            data/processed/e1_cmip6_v516_cams_historical.npz
+            data/processed/e1_cmip6_v516_cams_historical.json
+          retention-days: 30
+          if-no-files-found: warn

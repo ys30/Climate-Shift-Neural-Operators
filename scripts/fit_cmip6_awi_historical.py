@@ -130,7 +130,7 @@ def fit_historical(npz, output_dir, seed=11, epochs=2, width=8, modes=4,
                     "tail_weight":tail_weight,"best_epoch":best_epoch,
                     "normalization_mean_K":mu,"normalization_sd_K":sigma,
                     "training_npz_sha256":digest,"train_year_end":2004,
-                    "validation_year_end":2014,"training_only_monthly_p95_K":p95.astype(np.float32),
+                    "validation_year_end":2014,"training_only_monthly_p95_K":torch.from_numpy(p95.astype(np.float32)),
                     "model_width":width,"fno_modes":modes},ckpt)
         # Reload the exact checkpoint and reproduce outputs before reporting skill.
         saved=torch.load(ckpt,map_location="cpu",weights_only=True)

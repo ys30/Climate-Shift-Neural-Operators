@@ -1,0 +1,1 @@
+E1 v5.18: execute original archived CAMS Historical-only FNO/U-Net 18 verified frozen checkpoints on native SSP245 and SSP585 2030/2050/2080 sparse +1-day temperatures. Prerequisite successful v5.17 workflow 45902275281 with all 3 frozen arms.

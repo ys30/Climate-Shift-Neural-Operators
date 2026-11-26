@@ -1,0 +1,1 @@
+One-time v4.0 metadata-only audit of Pangeo CMIP6 public cloud catalog. Strict same source_id/member_id/grid_label for historical, ssp245 and ssp585 Day/tas. No CMIP6 grid field downloads, model training or future climate skill claims. Candidate stores remain unverified pending independent calendar/grid/unit checks.

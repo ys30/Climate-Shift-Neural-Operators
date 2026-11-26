@@ -1,0 +1,61 @@
+name: E1 v5.15 CAMS third-GCM actual Western-US native regional daily preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v515-cams-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v515-CAMS-native-daily
+  cancel-in-progress: false
+
+jobs:
+  third-gcm-native-pairs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install native calendar and source arrays; test original-source gates
+        run: |
+          python -m pip install -e '.[test,era5]'
+          python -m pytest tests/test_cmip6_v515_cams_regional_pairs.py
+      - name: Retrieve verified v5.14 third GCM source catalog and calendar audit
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v514-real-third-gcm-native-calendar-and-tiny-slice-audit
+          run-id: 45895659921
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs
+      - name: Verify CAMS native Western-US region and real +1 day pairs in all three experiments
+        run: |
+          python -m scripts.audit_cmip6_v515_cams_regional_pairs \
+            --prior inputs/e1_cmip6_v514_third_gcm_real_source_audit.json \
+            --output outputs/e1_cmip6_v515_cams_native_regional_pairs.json
+      - name: Enforce genuine GCM/SSP coordinate and day-pair audit
+        run: |
+          python - <<'PY'
+          import json
+          from scripts.audit_cmip6_v515_cams_regional_pairs import validate_regional
+          d=json.load(open("outputs/e1_cmip6_v515_cams_native_regional_pairs.json"))
+          assert d["status"]=="v515_CAMS_native_western_US_regional_one_day_real_source_gate"
+          assert d["model"]=="CAMS-CSM1-0" and d["no_neural_training"] is True
+          shape=validate_regional(d["experiments"])
+          assert shape[0]*shape[1]<=2000
+          print("CAMS three-source native regional pair gate successful",shape)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v515-CAMS-actual-native-regional-SSP-daily-pairs
+          path: outputs/e1_cmip6_v515_cams_native_regional_pairs.json
+          retention-days: 30
+          if-no-files-found: warn

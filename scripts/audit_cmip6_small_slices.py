@@ -123,9 +123,14 @@ def audit_manifest(manifest:dict, count:int=2)->dict:
             hist=scenarios["historical"]
             s245=scenarios["ssp245"]
             s585=scenarios["ssp585"]
-            ok=(hist["end_year"]<=2015
-                and s245["start_year"]>=2014
-                and s585["start_year"]>=2014
+            # Our *declared* experiment compares the common 2015–2100 future
+            # period; stores starting in 2201 MUST NOT pass this gate.
+            ok=(hist["start_year"]<=1850
+                and hist["end_year"]==2014
+                and s245["start_year"]==2015
+                and s585["start_year"]==2015
+                and s245["end_year"]>=2100
+                and s585["end_year"]>=2100
                 and hist["calendar"]==s245["calendar"]==s585["calendar"]
                 and hist["spatial_grid_shape"]==s245["spatial_grid_shape"]==s585["spatial_grid_shape"]
                 and all(s["tas_units"] in ("K","Kelvin","kelvin")
@@ -142,6 +147,7 @@ def audit_manifest(manifest:dict, count:int=2)->dict:
             "model_count":len(models),
             "compatible_trios":sum(m["historical_ssp_daily_schema_small_slice_compatible"] for m in models),
             "models":models,
+            "required_common_period":{"historical_end_year":2014,"ssp_first_year":2015,"ssp_last_year_minimum":2100},
             "limitations":[
                 "Only 12 temperature gridcells per store maximum: not a whole-grid missingness audit",
                 "No guarantee continuity, spatial geometry, grid-cell validity or archive completeness",

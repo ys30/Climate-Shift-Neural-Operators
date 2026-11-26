@@ -1,0 +1,83 @@
+name: E1 moderate tail-weight ERA5 ablation (one-time)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-tail-weight1-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-tail-weight1-v1
+  cancel-in-progress: false
+
+jobs:
+  moderate-tail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and test moderate tail training
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_tail_weighted_e1.py tests/test_conditional_skill.py tests/test_multiyear_summary.py
+      - name: Export seven-year real ERA5 same cohort and validate provenance
+        run: |
+          python scripts/export_wb2_multiyear.py \
+            --years 2008 2009 2010 2011 2012 2013 2014 \
+            --max-per-month 24 --stride 4 \
+            --output data/processed/e1_tail_weight1.npz
+          python scripts/check_e1_coverage.py \
+            --input data/processed/e1_tail_weight1.npz \
+            --metadata data/processed/e1_tail_weight1.json \
+            --years 2008 2009 2010 2011 2012 2013 2014 \
+            --min-per-month 20 --output outputs/e1_tail_weight1_coverage.json
+      - name: Moderate train-only monthly P95 loss weight 1, 3 seeds, 100 epochs
+        run: |
+          python scripts/run_e1_multiseed.py \
+            --input data/processed/e1_tail_weight1.npz \
+            --output-dir outputs/e1_tail_weight1 \
+            --train-end 2010 --val-end 2011 --test-end 2014 \
+            --seeds 11 22 33 --epochs 100 --width 8 --modes 4 \
+            --tail-weight 1 --require-pair-times
+      - name: Check model, year, and loss integrity; print precision-recall tradeoff
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('outputs/e1_tail_weight1')
+          s=json.loads((p/'seed_summary.json').read_text())
+          assert s['tail_weight']==1
+          assert s['split_isolation']['status']=='passed'
+          assert s['heldout_years']==['2012','2013','2014']
+          assert s['seasonal_local_p95_definition']['status']=='available_training_only'
+          assert s['area_weighting_status'].startswith('cos(latitude)')
+          for seed in [11,22,33]:
+              r=json.loads((p/f'seed_{seed}.json').read_text())
+              assert r['hyperparameters']['tail_weight']==1
+              assert r['hyperparameters']['epochs']==100
+              assert r['conditional_skill_reference']=='train_only_month_local_mean_std'
+              for model in ('fno','unet'):
+                  assert len(r['diagnostics'][model]['history'])==100
+                  assert set(r['per_test_year_anomaly_bin_errors'][model])=={'2012','2013','2014'}
+          for model in ('fno','unet'):
+              print(model, 'weighted RMSE', s['models'][model]['weighted_rmse']['mean'],
+                    'monthly P95 recall', s['models'][model]['monthly_local_hot_recall']['mean'])
+          PY
+      - name: Archive audited derived data only, not raw temperature fields
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-era5-moderate-tail-weight1-3seed
+          path: |
+            data/processed/e1_tail_weight1.json
+            outputs/e1_tail_weight1_coverage.json
+            outputs/e1_tail_weight1/*.json
+          retention-days: 14
+          if-no-files-found: warn

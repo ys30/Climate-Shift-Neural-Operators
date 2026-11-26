@@ -20,7 +20,7 @@ def test_full_three_seed_summary_or_fail():
     }
     score=aggregate_seed_scores([row,row,row])
     assert score["weighted_rmse_K"]["mean"]==2.1
-    assert score["local_p95_precision"]["mean"]==.7
+    assert score["local_p95_precision"]["mean"] == pytest.approx(.7)
     with pytest.raises(ValueError,match="three frozen"):
         aggregate_seed_scores([row,row])
 

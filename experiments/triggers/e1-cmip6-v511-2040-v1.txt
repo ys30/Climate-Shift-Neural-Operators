@@ -1,0 +1,1 @@
+Predeclared new source-only 2040 calendar-day cohort, days 3/7/11/15/19/23/27 monthly; 2 GCM × 2 SSP; no neural training.

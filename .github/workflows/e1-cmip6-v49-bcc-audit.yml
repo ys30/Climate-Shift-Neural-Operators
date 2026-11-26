@@ -1,0 +1,61 @@
+name: E1 CMIP6 v4.9 independent BCC-CSM2-MR data calendar gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v49-bcc-audit-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-cmip6-v49-bcc-audit-once
+  cancel-in-progress: false
+
+jobs:
+  second-model-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install read-only CMIP6 source dependencies and tests
+        run: |
+          python -m pip install "xarray" "zarr<4" "gcsfs" "cftime" "numpy" "pytest"
+          python -m pytest tests/test_cmip6_catalog.py tests/test_cmip6_zarr_probe.py tests/test_cmip6_small_slices.py
+      - name: Open exact BCC Historical SSP245 SSP585 catalog stores and read only tiny samples
+        run: |
+          python scripts/audit_cmip6_small_slices.py \
+            --manifest experiments/cmip6_v49_bcc_candidate_catalog.json \
+            --output outputs/e1_cmip6_v49_bcc_calendar_and_sample.json \
+            --max-models 1
+      - name: Report truthfully whether second model has common 2015-2100 period
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('outputs/e1_cmip6_v49_bcc_calendar_and_sample.json').read_text())
+          assert d['status']=='bounded_actual_cmip6_small_slice_audit_no_model_training'
+          assert d['model_count']==1
+          assert d['models'][0]['source_id']=='BCC-CSM2-MR'
+          assert d['models'][0]['member_id']=='r1i1p1f1'
+          assert d['compatible_trios'] in (0,1)
+          print(json.dumps({'eligible_for_common_period':d['compatible_trios']==1,
+            'experiments':{k:{'status':v['status'],
+                              'start':v.get('start_date_native_calendar'),
+                              'end':v.get('end_date_native_calendar'),
+                              'error':v.get('error')}
+                           for k,v in d['models'][0]['experiments'].items()}},indent=2))
+          PY
+      - name: Archive only second-model source diagnostics, no global fields
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-cmip6-v49-bcc-second-model-availability
+          path: outputs/e1_cmip6_v49_bcc_calendar_and_sample.json
+          if-no-files-found: warn
+          retention-days: 30

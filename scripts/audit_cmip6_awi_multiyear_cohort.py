@@ -12,7 +12,10 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from audit_cmip6_awi_daily_pairs import contiguous_span, exact_daily_pair_indices
+try:
+    from .audit_cmip6_awi_daily_pairs import contiguous_span, exact_daily_pair_indices
+except ImportError:  # script execution via python scripts/audit_...py
+    from audit_cmip6_awi_daily_pairs import contiguous_span, exact_daily_pair_indices
 
 TRAIN_YEARS = (1980, 1990, 2000, 2004)
 VALID_YEARS = (2005, 2010, 2014)

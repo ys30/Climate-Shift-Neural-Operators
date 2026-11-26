@@ -1,0 +1,1 @@
+E1 v5.16: third GCM CAMS native Historical-only 1980-2014 1140 +1-day forecast pairs; previous v5.15 regional/calendar source fingerprints must match; do not open SSP, train models, or select checkpoints.

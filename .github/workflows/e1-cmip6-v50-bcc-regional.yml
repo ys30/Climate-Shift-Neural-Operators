@@ -1,0 +1,63 @@
+name: E1 v5.0 BCC CMIP6 second-model native regional pilot
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v50-bcc-regional-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-cmip6-v50-bcc-regional-once
+  cancel-in-progress: false
+
+jobs:
+  bcc-regional:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test BCC native-grid identity, calendar and no-fake-read guards
+        run: |
+          python -m pip install "xarray" "zarr<4" "gcsfs" "cftime" "numpy" "pytest"
+          python -m pytest tests/test_cmip6_bcc_regional_pairs.py tests/test_cmip6_awi_daily_pairs.py
+      - name: Read exactly six native BCC regional day pairs (Historical, SSP245, SSP585)
+        run: |
+          python scripts/audit_cmip6_bcc_regional_pairs.py \
+            --manifest experiments/cmip6_v49_bcc_candidate_catalog.json \
+            --output outputs/e1_cmip6_v50_bcc_native_regional_pairs.json
+      - name: Fail closed for incompatible BCC source scenarios
+        run: |
+          python - <<'PY'
+          import json,math
+          from pathlib import Path
+          d=json.loads(Path("outputs/e1_cmip6_v50_bcc_native_regional_pairs.json").read_text())
+          assert d["status"]=="bcc_second_model_actual_regional_pairs_verified_no_neural_training"
+          assert set(d["scenario_diagnostics"])=={"historical","ssp245","ssp585"}
+          source=d["scenario_diagnostics"]
+          assert len({tuple(v["grid_shape"]) for v in source.values()})==1
+          assert len({(v["latitude_sha256"],v["longitude_sha256"]) for v in source.values()})==1
+          assert len({v["calendar"] for v in source.values()})==1
+          for v in source.values():
+              assert v["raw_grids_archived"] is False
+              assert len(v["pairs"])==2
+              for pair in v["pairs"]:
+                  assert pair["finite_values"] and 16<=pair["n_cells"]<=2000
+                  assert math.isfinite(pair["persistence_weighted_rmse_K_sanity_only"])
+                  assert pair["persistence_weighted_rmse_K_sanity_only"]>=0
+          print("BCC actual temperature region, calendar, and exact daily pairing passed.")
+          PY
+      - name: Archive only bounded source diagnostics (no full tensors)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-v50-bcc-native-regional-small-pilot
+          path: outputs/e1_cmip6_v50_bcc_native_regional_pairs.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,62 @@
+name: E1 CMIP6 calendar and tiny real temperature sample probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-small-slice-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-cmip6-small-slice-v1
+  cancel-in-progress: false
+
+jobs:
+  cmip6-small-slices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install read-only CF metadata and Zarr reader; test fail-closed checks
+        run: |
+          python -m pip install "xarray" "zarr<4" "gcsfs" "numpy" "cftime" "pytest"
+          python -m pytest tests/test_cmip6_catalog.py tests/test_cmip6_zarr_probe.py tests/test_cmip6_small_slices.py
+      - name: Inspect real CMIP6 native calendars and at most 12 temperature gridcells per store
+        run: |
+          python scripts/audit_cmip6_small_slices.py \
+            --manifest experiments/cmip6_v40_first_two_catalog_triples.json \
+            --output outputs/e1_cmip6_v42_small_slice_and_calendar.json \
+            --max-models 2
+      - name: Check native date and temperature sample results without claiming forecast skill
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('outputs/e1_cmip6_v42_small_slice_and_calendar.json').read_text())
+          assert d['status']=='bounded_actual_cmip6_small_slice_audit_no_model_training'
+          assert d['model_count']==2
+          assert 0<=d['compatible_trios']<=2
+          assert all(len(m['experiments'])==3 for m in d['models'])
+          for m in d['models']:
+              for scenario,report in m['experiments'].items():
+                  if report['status']=='small_slice_cf_dates_and_kelvin_samples_verified':
+                      assert report['full_fields_loaded'] is False
+                      assert report['n_requested_temperature_gridcells_max']<=12
+                      assert 1850<=report['start_year']<=2100
+                      assert 1850<=report['end_year']<=2200
+          print('CMIP6 native date/tiny-slice results recorded without inventing compatibility.')
+          PY
+      - name: Archive bounded audit metadata and small temperature statistics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-cmip6-v42-real-dates-and-small-slices
+          path: outputs/e1_cmip6_v42_small_slice_and_calendar.json
+          if-no-files-found: warn
+          retention-days: 30

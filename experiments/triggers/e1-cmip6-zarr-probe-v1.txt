@@ -1,0 +1,1 @@
+One-shot read-only CMIP6 Zarr schema probe of verified ACCESS-CM2 and AWI-CM-1-1-MR matched daily tas Historical, ssp245 and ssp585 catalog stores. Check actual time CF metadata, model calendar, Kelvin, grid schema with no climate fields loaded, no model training or future climate skill claims.

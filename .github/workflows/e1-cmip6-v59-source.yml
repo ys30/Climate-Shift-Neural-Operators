@@ -1,0 +1,74 @@
+name: E1 v5.9 native CMIP6 source-only temperature reference
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v59-source-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v59-source-v1
+  cancel-in-progress: false
+
+jobs:
+  source-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install audited source dependencies and test anomaly identities
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v59_source_warming.py
+      - name: Download frozen AWI Historical source
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v45-awi-historical-only-training-data
+          run-id: 45857281051
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/awi
+      - name: Download frozen BCC Historical source
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v51-bcc-historical-noleap-training-cohort
+          run-id: 45868844059
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/bcc
+      - name: Compute source-only native SSP sparse temperature references
+        run: |
+          python -m scripts.audit_cmip6_v59_source_warming \
+            --awi-npz inputs/awi/e1_cmip6_v45_awi_historical.npz \
+            --bcc-npz inputs/bcc/e1_cmip6_v51_bcc_historical.npz \
+            --awi-manifest experiments/cmip6_v40_first_two_catalog_triples.json \
+            --bcc-manifest experiments/cmip6_v49_bcc_candidate_catalog.json \
+            --output outputs/e1_cmip6_v59_source_reference.json
+      - name: Verify 12 exact native GCM scenario-year physical reference records
+        run: |
+          python - <<'PY'
+          import json, math
+          d=json.load(open("outputs/e1_cmip6_v59_source_reference.json"))
+          assert d["status"]=="v59_sparse_CMIP6_source_only_temperature_reference"
+          assert len(d["rows"])==12
+          assert {(r["gcm"],r["scenario"],r["year"]) for r in d["rows"]}=={
+              (g,s,y) for g in ("AWI","BCC") for s in ("ssp245","ssp585")
+              for y in (2030,2050,2080)}
+          assert all(r["n_historical_pairs"]==240 and r["n_future_pairs"]==24
+                     and math.isfinite(r["sampled_change_vs_historical_K"])
+                     for r in d["rows"])
+          print("Verified source-only sparse-temperature baseline without model fitting")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v59-native-gcm-source-only-sparse-temperature-reference
+          path: outputs/e1_cmip6_v59_source_reference.json
+          retention-days: 30
+          if-no-files-found: warn

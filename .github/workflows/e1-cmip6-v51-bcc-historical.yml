@@ -1,0 +1,67 @@
+name: E1 v5.1 BCC native noleap Historical-only 25-year cohort
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v51-bcc-historical-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-cmip6-v51-bcc-historical-once
+  cancel-in-progress: false
+
+jobs:
+  bcc-native-historical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install native calendar and immutable training cohort tests
+        run: |
+          python -m pip install "xarray" "zarr<4" "gcsfs" "cftime" "numpy" "pytest"
+          python -m pytest tests/test_cmip6_bcc_v51_historical.py tests/test_cmip6_bcc_regional_pairs.py
+      - name: BCC historical noleap daily tas extraction, never read SSP
+        run: |
+          python scripts/export_cmip6_bcc_v51_historical.py \
+            --manifest experiments/cmip6_v49_bcc_candidate_catalog.json \
+            --output data/processed/e1_cmip6_v51_bcc_historical.npz
+      - name: Validate all 1140 pairs, noleap calendar and fit-only grid-local P95
+        run: |
+          python - <<'PY'
+          import json,hashlib,numpy as np
+          from pathlib import Path
+          from scripts.export_cmip6_bcc_v51_historical import verify_saved_npz
+          p=Path('data/processed/e1_cmip6_v51_bcc_historical.npz')
+          verify_saved_npz(p)
+          r=json.loads(p.with_suffix('.json').read_text())
+          assert r['status']=='v51_bcc_historical_only_noleap_native_pairs_verified_no_training'
+          assert r['train_count']==900 and r['validation_count']==240
+          assert r['native_grid_shape']==[23,23]
+          assert r['model_calendar'] in ('365_day','noleap')
+          assert set(r['samples_per_train_month'].values())=={75}
+          assert r['ssp_data_accessed'] is False and r['model_trained'] is False
+          assert r['input_npz_sha256']==hashlib.sha256(p.read_bytes()).hexdigest()
+          with np.load(p,allow_pickle=False) as d:
+              assert d['X'].shape==d['y'].shape==(1140,1,23,23)
+              assert set(d.files).isdisjoint({'target_times','source_times'})
+              assert np.all(d['target_cf_day_value']-d['source_cf_day_value']==1)
+              assert d['monthly_train_p95_K'].shape==(12,23,23)
+          print('BCC Historical training-only noleap cohort verified',r['input_npz_sha256'])
+          PY
+      - name: Archive source metadata and BCC Historical-only regional temperatures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-v51-bcc-historical-noleap-training-cohort
+          path: |
+            data/processed/e1_cmip6_v51_bcc_historical.npz
+            data/processed/e1_cmip6_v51_bcc_historical.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,0 +1,1 @@
+One-time BCC-CSM2-MR r1i1p1f1 gn Historical/SSP245/SSP585 actual Western US native regional Kelvin daily tas source+1day sample audit. Two predeclared date pairs per scenario. Must confirm equal coordinate values, native calendar, finite temperatures, and same spatial shape. No training, no future SSP skill claim.

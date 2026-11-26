@@ -1,0 +1,59 @@
+name: E1 v5.6 immutable cross-GCM robustness audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v56-audit-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v56-robustness
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test no-leakage and input corruption guards
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v56_robustness.py
+      - name: Fetch verified immutable v5.5 contrasts
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v55-cross-gcm-awi-bcc-scenario-contrasts
+          run-id: 45873362850
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs
+      - name: Produce yearwise non-inferential audit
+        run: |
+          python scripts/audit_cmip6_v56_robustness.py \
+            --input inputs/e1_cmip6_v55_cross_gcm_contrasts.json \
+            --output outputs/e1_cmip6_v56_robustness.json
+      - name: Require complete 12 yearwise comparisons
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open("outputs/e1_cmip6_v56_robustness.json"))
+          assert d["status"]=="verified_v56_descriptive_robustness_no_significance"
+          assert len(d["year_level_cells"])==12 and len(d["scenario_aggregate_cells"])==4
+          assert d["independent_gcm_count"]==2
+          print(d["direction_counts"])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v56-frozen-cross-gcm-descriptive-robustness
+          path: outputs/e1_cmip6_v56_robustness.json
+          retention-days: 30
+          if-no-files-found: warn

@@ -1,0 +1,1 @@
+Reaudit real CMIP6 small slices with hard requirement Historical ending 2014 and SSP245/585 both covering 2015–2100. ACCESS-CM2 SSP585 existing store starts 2201; must be flagged ineligible while AWI-CM-1-1-MR remains eligible. Do not loosen the calendar gate; no training.

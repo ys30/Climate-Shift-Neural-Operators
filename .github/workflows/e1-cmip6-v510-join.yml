@@ -1,0 +1,71 @@
+name: E1 v5.10 source versus frozen forecast response join
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v510-join-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v510-scenario-response-join
+  cancel-in-progress: false
+
+jobs:
+  joined-response:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate source-to-response identities and reject invalid inputs
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v510_source_response.py
+      - name: Recover verified v5.8 frozen scenario response
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v58-frozen-sparse-ssp-scenario-response-error
+          run-id: 45878008075
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/forecast
+      - name: Recover verified v5.9 native source temperature reference
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v59-native-gcm-source-only-sparse-temperature-reference
+          run-id: 45891536056
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/source
+      - name: Reconstruct scenario temperature contrast and its model error
+        run: |
+          python -m scripts.join_cmip6_v510_source_response \
+            --source inputs/source/e1_cmip6_v59_source_reference.json \
+            --error inputs/forecast/e1_cmip6_v58_scenario_response.json \
+            --json-output outputs/e1_cmip6_v510_scenario_fidelity.json \
+            --csv-output outputs/e1_cmip6_v510_scenario_fidelity.csv
+      - name: Check all matched 42 GCM-year-model contrast records
+        run: |
+          python - <<'PY'
+          import json,math
+          d=json.load(open('outputs/e1_cmip6_v510_scenario_fidelity.json'))
+          assert d['status']=='v510_verified_join_of_sparse_CMIP6_source_and_frozen_forecast_scenario_response'
+          assert d['model_selection_performed'] is False
+          assert len(d['rows'])==42
+          assert all(math.isclose(x['forecast_ssp585_minus_245_K']-
+                       x['source_simulated_ssp585_minus_245_K'],
+                       x['forecast_response_error_K'],abs_tol=1e-8) for x in d['rows'])
+          print('Verified 42 matched simulated-scenario source and predicted regional contrasts')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v510-source-and-frozen-forecast-scenario-fidelity
+          path: outputs/e1_cmip6_v510_scenario_fidelity.*
+          retention-days: 30
+          if-no-files-found: warn

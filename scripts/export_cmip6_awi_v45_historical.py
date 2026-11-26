@@ -10,7 +10,10 @@ import hashlib
 import json
 from collections import Counter
 from pathlib import Path
-from audit_cmip6_awi_daily_pairs import contiguous_span, exact_daily_pair_indices
+try:
+    from .audit_cmip6_awi_daily_pairs import contiguous_span, exact_daily_pair_indices
+except ImportError:  # standalone CLI
+    from audit_cmip6_awi_daily_pairs import contiguous_span, exact_daily_pair_indices
 
 TRAIN_YEARS = tuple(range(1980, 2005))
 VALID_YEARS = tuple(range(2005, 2015))

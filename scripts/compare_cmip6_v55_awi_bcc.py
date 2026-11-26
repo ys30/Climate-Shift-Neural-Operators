@@ -35,9 +35,9 @@ def compare(awi,bcc):
     if (awi["historical_npz_sha256"]!="ac0a354032836c5de5463b122d26fad2270fd5ba2ebb48f43074105c8ce7b914"
         or bcc["historical_source_sha256"]!="a23260e8f14a23fb57483038bcd6ca03ba74c7944a48ba29d62bcc5bd354f452"):
         raise ValueError("Unverified source model Historical artifacts")
-    if awi["future_years"]!=bcc["future_years"]!=[2030,2050,2080]:
+    if awi["future_years"] != [2030,2050,2080] or bcc["future_years"] != [2030,2050,2080]:
         raise ValueError("Future year plan differs")
-    if awi["future_month_days"]!=bcc["future_month_days"]!=[8,20]:
+    if awi["future_month_days"] != [8,20] or bcc["future_month_days"] != [8,20]:
         raise ValueError("SSP sampled dates differ")
     if len(awi["checkpoint_sha256"])!=18 or len(bcc["checkpoint_sha"])!=18:
         raise ValueError("All 18 historical checkpoints required in each GCM")

@@ -1,0 +1,1 @@
+One-time corrected CMIP6 tiny real-data audit with module/standalone import support; native CF calendars and at most 12 Kelvin temperature gridcell values per scenario. No full climate downloads or model training.

@@ -1,0 +1,103 @@
+name: E1 v5.18 CAMS third-GCM Historical-frozen SSP prediction
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v518-cams-ssp-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v518-cams-frozen-ssp
+  cancel-in-progress: false
+
+jobs:
+  frozen-cams-ssp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate source isolation and frozen SSP scoring guards
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v518_cams_frozen_ssp.py tests/test_cmip6_v517_cams_historical_arms.py
+      - name: Restore original Historical-only CAMS source cohort
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v516-cams-native-historical-only-training-data
+          run-id: 45900398047
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/cams
+      - name: Restore CAMS frozen historical 1x loss models
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v517-cams-historical-frozen-weight-0
+          run-id: 45902275281
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_0
+      - name: Restore CAMS frozen historical 2x loss models
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v517-cams-historical-frozen-weight-1
+          run-id: 45902275281
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_1
+      - name: Restore CAMS frozen historical 4x loss models
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v517-cams-historical-frozen-weight-3
+          run-id: 45902275281
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_3
+      - name: Verify 18 checkpoints and all training-only normalizations BEFORE future access
+        run: |
+          python - <<'PY'
+          from scripts.evaluate_cmip6_v518_cams_frozen_ssp import inspect_frozen
+          d=inspect_frozen("data/cams/e1_cmip6_v516_cams_historical.npz",
+            "data/cams/e1_cmip6_v516_cams_historical.json","frozen")
+          assert len(d["checkpoints"])==18
+          assert d["historical_sha"] and d["catalog_sha"]
+          print("CAMS Historical-only 18 checkpoint SHA verification complete")
+          PY
+      - name: Evaluate frozen models on CAMS native 2030 2050 2080 SSP245 SSP585
+        run: |
+          python -m scripts.evaluate_cmip6_v518_cams_frozen_ssp \
+            --historical data/cams/e1_cmip6_v516_cams_historical.npz \
+            --metadata data/cams/e1_cmip6_v516_cams_historical.json \
+            --arm-dir frozen \
+            --output outputs/e1_cmip6_v518_cams_frozen_ssp.json
+      - name: Verify both complete scenarios and original 18 frozen checkpoints
+        run: |
+          python - <<'PY'
+          import json,math
+          from scripts.evaluate_cmip6_v518_cams_frozen_ssp import OUTPUT_STATUS
+          d=json.load(open('outputs/e1_cmip6_v518_cams_frozen_ssp.json'))
+          assert d["status"]==OUTPUT_STATUS
+          assert d["ssp_used_for_fitting_or_checkpoint_selection"] is False
+          assert len(d["checkpoint_sha"])==18
+          assert set(d["scenario_results"])=={"ssp245","ssp585"}
+          for v in d["scenario_results"].values():
+            x=v["scores"]
+            assert set(x)=={"all","2030","2050","2080"}
+            assert x["all"]["n_pairs"]==72
+            assert all(x[str(y)]["n_pairs"]==24 for y in (2030,2050,2080))
+            assert len(x["all"]["models"])==2
+            for m in ("fno","unet"):
+              assert len(x["all"]["models"][m])==3
+              assert all(math.isfinite(x["all"]["models"][m][w]["weighted_rmse_K"]["mean"]) for w in ("0","1","3"))
+          print("Third GCM CAMS SSP sparse frozen forecast validation complete")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v518-third-gcm-CAMS-frozen-SSP-forecast-scores
+          path: outputs/e1_cmip6_v518_cams_frozen_ssp.json
+          retention-days: 30
+          if-no-files-found: warn

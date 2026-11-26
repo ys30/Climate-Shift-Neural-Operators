@@ -68,3 +68,17 @@ AWI SSP245 hot fractions were approx 0.1198, 0.1950, 0.3241 and AWI SSP585 0.148
 4. Add at least one additional independent GCM/member and/or a denser fully separate future test period before high-confidence paper claims.
 
 **This is an initial two-GCM simulated future-domain replication, not an observation-validated or publication-ready full CMIP6 ensemble benchmark.**
+
+
+## Post-aggregation disaggregation check: FNO 1× versus Persistence in each sampled future year
+
+The **frozen v5.5 archived 96-row contrast JSON**, not new parameter fitting, shows that standard-MSE FNO has lower RMSE than each source GCM's Persistence benchmark in **all 12** separately scored GCM × SSP × sampled-year cells:
+
+| GCM | SSP | 2030 within-GCM RMSE reduction | 2050 reduction | 2080 reduction |
+|---|---|---:|---:|---:|
+| AWI | SSP245 | 8.30% | 9.18% | 16.49% |
+| AWI | SSP585 | 11.97% | 5.65% | 15.40% |
+| BCC | SSP245 | 7.68% | 14.39% | 8.61% |
+| BCC | SSP585 | 10.74% | 15.11% | 9.12% |
+
+This strengthens the **descriptive consistency within the predeclared sparse sample** beyond reporting only aggregate SSP scores, but cannot be called 12 independent climate-ensemble replications or a statistical significance result: the years are sampled within two correlated scenario trajectories, each with only 24 fixed source-target dates, and neural random seeds share training data. Year-level improvement percentages differ, supporting explicit reporting of time and GCM heterogeneity rather than a single universal number. No model training or score-based checkpoint selection occurred during this additional aggregation.

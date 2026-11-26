@@ -1,0 +1,74 @@
+name: E1 AWI CMIP6 v4.5 historical 25yr dense-month training cohort
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v45-historical-v1.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e1-cmip6-v45-historical-v1
+  cancel-in-progress: false
+
+jobs:
+  historical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install auditable package and validate frozen time-split
+        run: |
+          python -m pip install -e '.[test,era5]' cftime
+          python -m pytest tests/test_cmip6_v45_historical_export.py tests/test_cmip6_awi_daily_pairs.py tests/test_cmip6_awi_multiyear_cohort.py tests/test_seasonal_extremes.py
+      - name: Read bounded real AWI daily tas, Historical ONLY, train 1980-2004 and val 2005-2014
+        run: |
+          python scripts/export_cmip6_awi_v45_historical.py \
+            --manifest experiments/cmip6_v40_first_two_catalog_triples.json \
+            --output data/processed/e1_cmip6_v45_awi_historical.npz
+      - name: Verify NPZ identity and that all P95 thresholds fit on training only
+        run: |
+          python - <<'PY'
+          import json
+          import numpy as np
+          from pathlib import Path
+          from climate_shift.data import load_npz_pairs
+          from climate_shift.seasonal_extremes import fit_local_monthly_p95
+          p=Path('data/processed/e1_cmip6_v45_awi_historical.npz')
+          m=json.loads(p.with_suffix('.json').read_text())
+          assert m['status']=='v45_historical_dense_sparsely_sampled_training_ready_no_model_training'
+          assert m['sample_count']=={'train':900,'validation':240,'total':1140}
+          assert m['samples_per_calendar_month']=={'train':75,'validation':20}
+          assert m['NPZ_contains_only_historical'] is True
+          assert m['ssp_test_data_read'] is False
+          x,y,years=load_npz_pairs(p)
+          assert x.shape==y.shape==(1140,1,26,27)
+          assert years.min()==1980 and years.max()==2014
+          assert not np.any(years>=2015)
+          train=years<=2004
+          with np.load(p,allow_pickle=False) as z:
+              src=z['source_times']; target=z['target_times']; lat=z['latitude']
+          assert np.all(target-src==np.timedelta64(24,'h'))
+          assert target[train].max()<src[~train].min()
+          q,ref=fit_local_monthly_p95(y[train],target[train],min_samples_per_month=20)
+          assert q.shape==(12,26,27) and np.isfinite(q).all()
+          assert set(ref['actual_samples_per_month'].values())=={75}
+          assert 0 < m['validation_persistence_weighted_rmse_K_descriptive'] < 30
+          print('TRAINING-ONLY DAILY DATA CONTRACT PASS',m['dataset_sha256'])
+          PY
+      - name: Archive derived historical regional cohort and provenance (no SSP data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-cmip6-v45-awi-historical-only-training-data
+          path: |
+            data/processed/e1_cmip6_v45_awi_historical.npz
+            data/processed/e1_cmip6_v45_awi_historical.json
+          retention-days: 7
+          if-no-files-found: warn

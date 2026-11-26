@@ -1,0 +1,77 @@
+name: E1 v5.13 new 2040 versus original SSP model replication
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v513-compare-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v513-frozen-replication
+  cancel-in-progress: false
+
+jobs:
+  replicate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify source-matched skill identities and corruption tests
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v513_2040_replication.py
+      - name: Retrieve original AWI frozen sparse SSP results
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v48-first-frozen-ssp-sparse-evaluation
+          run-id: 45864317174
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/awi
+      - name: Retrieve original BCC frozen sparse SSP results
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v54-bcc-first-frozen-ssp-results
+          run-id: 45872811683
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/bcc
+      - name: Retrieve validated independent 2040 frozen neural results
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v512-frozen-2040-cmip6-neural-scores
+          run-id: 45894027781
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/new
+      - name: Compare relative skill and tail Recall without new fitting
+        run: |
+          python -m scripts.compare_cmip6_v513_2040_replication \
+            --awi inputs/awi/e1_cmip6_v48_frozen_ssp_evaluation.json \
+            --bcc inputs/bcc/e1_cmip6_v54_bcc_frozen_ssp.json \
+            --new inputs/new/e1_cmip6_v512_frozen_2040.json \
+            --json-output outputs/e1_cmip6_v513_2040_replication.json \
+            --csv-output outputs/e1_cmip6_v513_2040_replication.csv
+      - name: Audit all 24 matched neural contrasts and four GCM SSP summaries
+        run: |
+          python - <<'PY'
+          import json,math
+          d=json.load(open('outputs/e1_cmip6_v513_2040_replication.json'))
+          assert d["status"]=="v513_frozen_2040_vs_old_sparse_projected_forecast_replication_audit"
+          assert d["model_selection_performed"] is False
+          assert len(d["rows"])==24 and len(d["four_gcm_scenario_summaries"])==4
+          assert all(math.isfinite(r["new_relative_skill_pct"]) for r in d["rows"])
+          print("Four source-scenario summaries:",json.dumps(d["descriptive_counts"],indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v513-frozen-2040-vs-original-scenario-replication
+          path: outputs/e1_cmip6_v513_2040_replication.*
+          retention-days: 30
+          if-no-files-found: warn

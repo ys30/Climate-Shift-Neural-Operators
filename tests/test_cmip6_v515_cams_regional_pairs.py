@@ -12,7 +12,7 @@ def fixtures():
            "catalog_sha256":"audit-sha","models":[{
                "source_id":"CAMS-CSM1-0","member_id":"r2i1p1f1","grid_label":"gn",
                "passed_small_slice_time_and_geometry_gate":True,
-               "metadata_provenance":{e:source[e] for e in EXPS}}]}
+               "metadata_provenance":{e:copy.deepcopy(source[e]) for e in EXPS}}]}
     return metadata,prior
 
 def native():

@@ -1,0 +1,67 @@
+name: E1 v5.8 frozen SSP scenario response diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v58-response-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v58-response
+  cancel-in-progress: false
+
+jobs:
+  response:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Unit tests - no future fitting and scenario identity
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v58_scenario_response.py
+      - name: Fetch original AWI v4.8 SSP evaluation
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v48-first-frozen-ssp-sparse-evaluation
+          run-id: 45864317174
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/awi
+      - name: Fetch original BCC v5.4 SSP evaluation
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v54-bcc-first-frozen-ssp-results
+          run-id: 45872811683
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/bcc
+      - name: Compute frozen native-GCM SSP585 minus SSP245 forecast response bias
+        run: |
+          python -m scripts.evaluate_cmip6_v58_scenario_response \
+            --awi inputs/awi/e1_cmip6_v48_frozen_ssp_evaluation.json \
+            --bcc inputs/bcc/e1_cmip6_v54_bcc_frozen_ssp.json \
+            --output outputs/e1_cmip6_v58_scenario_response.json
+      - name: Validate factorial and provenance
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open("outputs/e1_cmip6_v58_scenario_response.json"))
+          assert len(x["rows"]) == 42
+          assert len([r for r in x["rows"] if r["predictor"]=="persistence"])==6
+          assert x["n_source_gcms"]==2 and x["members_per_gcm"]==1
+          print("Verified 42 frozen SSP-response contrasts")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v58-frozen-sparse-ssp-scenario-response-error
+          path: outputs/e1_cmip6_v58_scenario_response.json
+          retention-days: 30
+          if-no-files-found: warn

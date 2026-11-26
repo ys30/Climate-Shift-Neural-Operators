@@ -1,0 +1,1 @@
+One-shot verified-source BCC noleap Historical-only model fit. Use v5.1 saved native 23x23 Historical NPZ SHA a23260e8f14a23fb57483038bcd6ca03ba74c7944a48ba29d62bcc5bd354f452, native CF days and month P95 fitted only on 1980-2004 targets. FNO and U-Net, standard MSE, seed 11, 2 epochs, checkpoint Historical 2005-2014 only. Do not load SSP245/585 or claim future skill.

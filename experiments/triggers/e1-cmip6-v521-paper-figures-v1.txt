@@ -1,1 +1,3 @@
 Generate manuscript figures and source-verified descriptive Results from successful v5.19 three-GCM frozen SSP audit, with no extra fitting or unsupported inference.
+
+Rerun corrected v5.21 CSV schema projection after 45914965336 failure; inputs and numerical values unchanged.

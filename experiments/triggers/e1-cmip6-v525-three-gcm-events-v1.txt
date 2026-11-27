@@ -1,0 +1,1 @@
+E1 v5.25: compare real archived original CAMS v5.20 45914481554, BCC v5.23 45928444026, AWI v5.24 45937473743 contiguous 2050 summer native SSP245/585 +1-day event-day P95 Recall, Precision and RMSE for all 54 frozen Historical trained checkpoints. No refitting or GCM independence inflation.

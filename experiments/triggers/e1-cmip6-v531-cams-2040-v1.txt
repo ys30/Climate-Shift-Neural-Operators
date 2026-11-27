@@ -1,0 +1,1 @@
+E1 v5.31 locked CAMS-CSM1-0 2040 independent temporal holdout, 91 consecutive native +1 day summer TAS target days for SSP245 and SSP585, original unchanged 18 Historical-only frozen checkpoints. No 2040 tuning, do not select checkpoint from 2050 performance. Same pixel 3-day historical local P95 events and native calendar verification.

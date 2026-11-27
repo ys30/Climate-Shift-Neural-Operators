@@ -1,0 +1,102 @@
+name: E1 v5.31 CAMS original-frozen 2040 independent contiguous summer holdout
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v531-cams-2040-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v531-CAMS-2040-temporal-holdout
+  cancel-in-progress: false
+
+jobs:
+  summer-hot-events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install model runtime; test exact native daily event sequence
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v531_cams_2040_holdout.py tests/test_cmip6_v520_cams_contiguous_summer.py tests/test_cmip6_v518_cams_frozen_ssp.py
+      - name: Recover immutable CAMS Historical-only 1980-2014 sources
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v516-cams-native-historical-only-training-data
+          run-id: 45900398047
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/cams
+      - name: Recover CAMS frozen Historical weight 0
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v517-cams-historical-frozen-weight-0
+          run-id: 45902275281
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_0
+      - name: Recover CAMS frozen Historical weight 1
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v517-cams-historical-frozen-weight-1
+          run-id: 45902275281
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_1
+      - name: Recover CAMS frozen Historical weight 3
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v517-cams-historical-frozen-weight-3
+          run-id: 45902275281
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_3
+      - name: Verify exact 18 Historical-only checkpoint hashes before any SSP read
+        run: |
+          python - <<'PY'
+          from scripts.evaluate_cmip6_v518_cams_frozen_ssp import inspect_frozen
+          d=inspect_frozen('data/cams/e1_cmip6_v516_cams_historical.npz',
+                           'data/cams/e1_cmip6_v516_cams_historical.json','frozen')
+          assert len(d["checkpoints"])==18
+          print("Historical-only CAMS SHA and P95 confirmed for 18 frozen checkpoints")
+          PY
+      - name: Run independent 2040 native 91-day continuous summer SSP245 and SSP585 forecasts
+        run: |
+          python -m scripts.evaluate_cmip6_v531_cams_2040_holdout \
+            --historical data/cams/e1_cmip6_v516_cams_historical.npz \
+            --metadata data/cams/e1_cmip6_v516_cams_historical.json \
+            --arm-dir frozen \
+            --output outputs/e1_cmip6_v531_CAMS_2040_contiguous_summer.json
+      - name: Audit continuous 91 native days per scenario and all original frozen arms
+        run: |
+          python - <<'PY'
+          import json,math
+          from scripts.evaluate_cmip6_v531_cams_2040_holdout import STATUS,verify
+          d=json.load(open("outputs/e1_cmip6_v531_CAMS_2040_contiguous_summer.json"))
+          assert d["status"]==STATUS and d["ssp_fitted"] is False and d["year"]==2040
+          verify(d)
+          assert d["source_count_per_ssp"]==91
+          assert len(d["checkpoint_sha"])==18
+          assert set(d["scenarios"])=={"ssp245","ssp585"}
+          for s,v in d["scenarios"].items():
+            assert v["n_pairs"]==91 and v["source"]["n_bounded_regional_native_days_read"]==92
+            assert set(v["models"])=={"fno","unet"}
+            for m in ("fno","unet"):
+              assert set(v["models"][m])=={"0","1","3"}
+              for w,rec in v["models"][m].items():
+                assert len(rec["rmse_K"]["individual"])==3
+                assert math.isfinite(rec["rmse_K"]["mean"])
+          print("CAMS 91-day contiguous native 2040 holdout archive passed:",list(d["scenarios"]))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v531-CAMS-2040-contiguous-summer-temporal-holdout
+          path: outputs/e1_cmip6_v531_CAMS_2040_contiguous_summer.json
+          retention-days: 30
+          if-no-files-found: warn

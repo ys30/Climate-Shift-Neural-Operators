@@ -1,0 +1,1 @@
+E1 v5.32: source-locked 3 independently simulated GCMs × two separated 2040 and 2050 summers × SSP245/585, 12 native continuous 91-day evaluation cells, original 54 frozen Historical-only FNO/U-Net checkpoints, no future fitting, verify identical 18 SHA per GCM across years, output full 72 neural arm results and RMSE/Recall/Precision paired descriptive audit.

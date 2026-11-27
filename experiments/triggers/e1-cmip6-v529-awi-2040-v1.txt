@@ -1,0 +1,1 @@
+E1 v5.29 predeclared separate 2040 summer AWI-CM-1-1-MR original Gregorian native-grid day+1 SSP245/SSP585 91 consecutive targets, three-day historical local P95 event-day Recall/Precision, 18 original immutable Historical-only checkpoints, no 2040 tuning. This is a temporal holdout after 2050 exploratory results, not an independent GCM model member.

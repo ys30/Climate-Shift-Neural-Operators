@@ -1,0 +1,93 @@
+name: E1 v5.30 BCC independent native noleap 2040 summer holdout
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v530-bcc-2040-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v530-BCC-2040-temporal-holdout
+  cancel-in-progress: false
+
+jobs:
+  bcc-2040:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check original BCC 2050 compatibility and strict heldout 2040 boundaries
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v530_bcc_2040_holdout.py tests/test_cmip6_v523_bcc_contiguous_summer.py tests/test_cmip6_bcc_v54_frozen_ssp.py
+      - name: Retrieve verified original BCC Historical native source
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v51-bcc-historical-noleap-training-cohort
+          run-id: 45868844059
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/processed
+      - name: Retrieve original BCC 1x Historical frozen arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-0
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_0
+      - name: Retrieve original BCC 2x Historical frozen arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-1
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_1
+      - name: Retrieve original BCC 4x Historical frozen arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-3
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_3
+      - name: Verify original BCC Historical source and 18 checkpoint SHA before 2040 read
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.evaluate_cmip6_bcc_v54_frozen_ssp import inspect_frozen_sources
+          f=inspect_frozen_sources(Path("data/processed/e1_cmip6_v51_bcc_historical.npz"),Path("frozen"))
+          assert len(f["checkpoints"])==18 and f["p95"].shape==(12,23,23)
+          assert len(set(f["checkpoint_sha_by_model"].values()))==18
+          print("Verified 18 original noleap frozen BCC Historical checkpoints")
+          PY
+      - name: Run BCC 2040 independent summer with both native noleap SSP scenarios
+        run: |
+          python -m scripts.evaluate_cmip6_v530_bcc_2040_holdout \
+            --historical data/processed/e1_cmip6_v51_bcc_historical.npz \
+            --arm-dir frozen \
+            --manifest experiments/cmip6_v49_bcc_candidate_catalog.json \
+            --output outputs/e1_cmip6_v530_BCC_2040_contiguous_summer.json
+      - name: Audit original historical-only fitting and 2040 91 target days
+        run: |
+          python - <<'PY'
+          import json
+          from scripts.evaluate_cmip6_v530_bcc_2040_holdout import verify
+          p="outputs/e1_cmip6_v530_BCC_2040_contiguous_summer.json"
+          d=verify(json.load(open(p)))
+          assert d["ssp_fitted"] is False and d["temporal_independence_from_2050"] is True
+          assert d["selection_policy"].startswith("All original Historical")
+          print("BCC 2040 native noleap independent time-window output validated")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v530-BCC-2040-independent-temporal-holdout
+          path: outputs/e1_cmip6_v530_BCC_2040_contiguous_summer.json
+          retention-days: 30
+          if-no-files-found: warn

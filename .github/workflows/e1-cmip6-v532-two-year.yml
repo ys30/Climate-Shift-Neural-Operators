@@ -1,0 +1,105 @@
+name: E1 v5.32 three GCM two-year cross-year frozen heat-event comparison
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v532-two-year-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v532-three-GCM-two-year
+  cancel-in-progress: false
+
+jobs:
+  two-year-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test GCM-year SSP source integrity and 54 original checkpoint provenance
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v532_two_year_three_gcm_events.py
+      - name: Original AWI 2040 holdout
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v529-AWI-2040-new-temporal-holdout-contiguous-summer
+          run-id: 45954950987
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/awi2040
+      - name: Original AWI 2050 event results
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v524-AWI-2050-native-contiguous-summer-hot-event-forecast
+          run-id: 45937473743
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/awi2050
+      - name: Original BCC 2040 holdout
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v530-BCC-2040-independent-temporal-holdout
+          run-id: 45956507929
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/bcc2040
+      - name: Original BCC 2050 event results
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v523-BCC-2050-native-contiguous-summer-hot-event-forecast
+          run-id: 45928444026
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/bcc2050
+      - name: Original CAMS 2040 holdout
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v531-CAMS-2040-contiguous-summer-temporal-holdout
+          run-id: 46054222652
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/cams2040
+      - name: Original CAMS 2050 event results
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v520-CAMS-2050-contiguous-summer-daily-heat-events
+          run-id: 45914481554
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/cams2050
+      - name: Compare 3 GCM × 2 years × 2 SSP with the same 54 frozen checkpoint hashes
+        run: |
+          python -m scripts.audit_cmip6_v532_two_year_three_gcm_events \
+            --awi-2040 inputs/awi2040/e1_cmip6_v529_AWI_2040_contiguous_summer.json \
+            --awi-2050 inputs/awi2050/e1_cmip6_v524_AWI_2050_contiguous_summer.json \
+            --bcc-2040 inputs/bcc2040/e1_cmip6_v530_BCC_2040_contiguous_summer.json \
+            --bcc-2050 inputs/bcc2050/e1_cmip6_v523_BCC_2050_contiguous_summer.json \
+            --cams-2040 inputs/cams2040/e1_cmip6_v531_CAMS_2040_contiguous_summer.json \
+            --cams-2050 inputs/cams2050/e1_cmip6_v520_CAMS_2050_contiguous_summer.json \
+            --output-dir outputs/e1_v532_three_GCM_two_year
+      - name: Independently verify complete paired years and all original model arms
+        run: |
+          python - <<'PY'
+          import json,csv
+          from pathlib import Path
+          p=Path("outputs/e1_v532_three_GCM_two_year")
+          r=json.loads((p/"v532_three_GCM_2040_2050_event_replication.json").read_text())
+          assert r["independent_GCM_count"]==3 and r["year_GCM_SSP_cells"]==12
+          assert r["descriptive_neural_arm_rows"]==72
+          assert r["original_frozen_neural_checkpoint_count"]==54
+          assert r["checkpoint_SHA_equal_between_years"] and r["ssp_used_for_fitting"] is False
+          with (p/"v532_all_72_model_scenario_year_rows.csv").open() as f:
+            assert len(list(csv.DictReader(f)))==72
+          print("Two-year 3 GCM frozen provenance and replication metrics verified")
+          print(json.dumps(r["cell_counts"],indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v532-three-GCM-two-year-frozen-contiguous-events
+          path: outputs/e1_v532_three_GCM_two_year/
+          retention-days: 30
+          if-no-files-found: warn

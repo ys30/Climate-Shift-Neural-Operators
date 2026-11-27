@@ -1,0 +1,1 @@
+E1 v5.24 AWI-CM-1-1-MR native Gregorian Historical-frozen 18 checkpoints; full contiguous 2050 June-August 91 +1day target days for SSP245 and SSP585; common >=3 day local monthly historical TAS P95 event-day protocol as v5.20 CAMS and v5.23 BCC. No future fitting.

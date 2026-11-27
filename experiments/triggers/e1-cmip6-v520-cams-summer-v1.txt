@@ -1,0 +1,1 @@
+E1 v5.20 contiguous 2050 CAMS 91 source days June 1-August 30 => 91 target days June 2-August 31, 3+ day native monthly P95 event-day recall and precision, both SSP245/585. Require v5.16 source SHA and all 18 frozen v5.17 trained checkpoints, no future adaptation.

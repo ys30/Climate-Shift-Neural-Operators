@@ -40,7 +40,7 @@ def write_tables(rows,target):
         keys=["gcm","ssp","persistence_rmse_K","fno1_rmse_K","fno1_rmse_skill_pct",
               "fno4_recall_minus_fno1_pp","fno4_rmse_minus_fno1_K",
               "persistence_recall_minus_fno4_pp"]
-        w=csv.DictWriter(f,fieldnames=keys);w.writeheader();w.writerows(rows)
+        w=csv.DictWriter(f,fieldnames=keys,extrasaction="ignore");w.writeheader();w.writerows(rows)
 
 def render(rows,out):
     import matplotlib

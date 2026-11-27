@@ -1,0 +1,82 @@
+name: E1 v5.25 three-GCM contiguous 2050 summer event comparison
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v525-three-gcm-events-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v525-three-GCM-contiguous
+  cancel-in-progress: false
+
+jobs:
+  three-gcm-contiguous:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test independent GCM clustering, complete frozen arms and source integrity
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v525_three_gcm_contiguous_events.py
+      - name: Restore verified AWI native Gregorian 2050 continuous pilot
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v524-AWI-2050-native-contiguous-summer-hot-event-forecast
+          run-id: 45937473743
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/awi
+      - name: Restore verified BCC native noleap 2050 continuous pilot
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v523-BCC-2050-native-contiguous-summer-hot-event-forecast
+          run-id: 45928444026
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/bcc
+      - name: Restore verified CAMS independent 2050 continuous pilot
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v520-CAMS-2050-contiguous-summer-daily-heat-events
+          run-id: 45914481554
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/cams
+      - name: Audit all 3 GCM × 2 SSP × 2 architectures × 3 weights
+        run: |
+          python -m scripts.audit_cmip6_v525_three_gcm_contiguous_events \
+            --awi inputs/awi/e1_cmip6_v524_AWI_2050_contiguous_summer.json \
+            --bcc inputs/bcc/e1_cmip6_v523_BCC_2050_contiguous_summer.json \
+            --cams inputs/cams/e1_cmip6_v520_CAMS_2050_contiguous_summer.json \
+            --output-dir outputs/e1_v525_three_GCM_contiguous
+      - name: Independently enforce six native SSP cells and 36 frozen analysis arms
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("outputs/e1_v525_three_GCM_contiguous")
+          d=json.loads((p/"v525_three_GCM_2050_contiguous_event_audit.json").read_text())
+          assert d["status"]=="v525_three_independent_GCM_2050_contiguous_event_day_audit"
+          assert d["independent_GCM_count"]==3 and d["scenario_cells"]==6
+          assert d["neural_arm_rows"]==36 and d["frozen_checkpoint_count"]==54
+          assert d["ssp_used_for_fitting_or_selection"] is False
+          assert len(d["scenario_findings"])==6
+          assert len({(r["gcm"],r["scenario"]) for r in d["scenario_findings"]})==6
+          assert all(r["native_contiguous_target_days"]==91 for r in d["neural_arms"])
+          print("Three native-GCM continuous event replication: successfully audited")
+          print(json.dumps(d["GCM_level_counts"],indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v525-three-independent-GCM-contiguous-2050-events-compare
+          path: outputs/e1_v525_three_GCM_contiguous/
+          retention-days: 30
+          if-no-files-found: warn

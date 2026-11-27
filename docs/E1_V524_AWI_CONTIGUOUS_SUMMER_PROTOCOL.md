@@ -1,0 +1,7 @@
+# E1 v5.24: AWI independent native Gregorian contiguous summer hot-event replication
+
+This protocol uses one AWI-CM-1-1-MR r1i1p1f1 gn SSP245 and SSP585, on native 26×27 Western US grid, 2050-06-01 through 2050-08-30 consecutive source days, 2050-06-02 through 2050-08-31 consecutive day+1 targets. The event definition is identical to CAMS v5.20 and BCC v5.23: same pixel with at least three consecutive daily mean tas exceedances over each GCM's own Historical-training monthly local P95. The 18 Historical-only frozen AWI checkpoints and independent normalization/thresholds are reused verbatim from success run 45861178303, using audited Historical NPZ run 45857281051. Strict pre-SSP source/checkpoint SHA validation is mandatory.
+
+The full experiment assesses area-weighted one-day RMSE/MAE/Bias, daily P95 Precision/Recall, and at-least-three-day event-day Recall/Precision, by two neural architectures, three training tail-loss weights, three seeds, and Persistence. No SSP fitting, change of thresholds, or model selection. Model source days are contiguous, but heat events at start/end remain window-censored. This is simulated native daily mean tas not observed future temperature or tasmax, and one model member per GCM is not an independent climate ensemble.
+
+After success, integrate CAMS v5.20, BCC v5.23, AWI v5.24 with hierarchical descriptive GCM-level counts, not six independent samples.

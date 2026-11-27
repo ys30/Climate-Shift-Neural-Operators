@@ -1,0 +1,65 @@
+name: E1 v5.27 three-GCM 2050 continuous-event Pareto tradeoff
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v527-pareto-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v527-contiguous-Pareto
+  cancel-in-progress: false
+
+jobs:
+  pareto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate frozen seed provenance and Pareto dominance behavior
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v527_contiguous_pareto.py
+      - name: Restore successful original v5.25 three-GCM continuous event archive
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v525-three-independent-GCM-contiguous-2050-events-compare
+          run-id: 45948547935
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs
+      - name: Audit 42 candidate predictive configurations over 6 GCM/SSP cases
+        run: |
+          python -m scripts.audit_cmip6_v527_contiguous_pareto \
+            --input inputs/v525_three_GCM_2050_contiguous_event_audit.json \
+            --output-dir outputs/v527_three_GCM_pareto
+      - name: Audit source-linked output and independent GCM counts
+        run: |
+          python - <<'PY'
+          import json,csv
+          from pathlib import Path
+          p=Path("outputs/v527_three_GCM_pareto")
+          d=json.loads((p/"v527_three_GCM_pareto_event_audit.json").read_text())
+          assert d["status"]=="v527_three_GCM_contiguous_event_multiobjective_descriptive_audit"
+          assert d["candidate_rows"]==42 and d["scenario_cells"]==6
+          assert d["independent_GCM_count"]==3 and d["no_future_refit"] is True
+          assert len(d["scenarios"])==6
+          assert all(x["n_candidates"]==7 for x in d["scenarios"])
+          with (p/"v527_42_candidate_metrics.csv").open() as f:
+            assert len(list(csv.DictReader(f)))==42
+          print(json.dumps(d["descriptive_counts"],indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v527-three-GCM-2050-event-pareto-analysis
+          path: outputs/v527_three_GCM_pareto/
+          retention-days: 30
+          if-no-files-found: warn

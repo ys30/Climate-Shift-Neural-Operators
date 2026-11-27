@@ -94,9 +94,9 @@ def score(pred,target,months,frozen):
 
 def evaluate(frozen,manifest):
     import torch
-    row=get_model(manifest)
     if len(frozen["checkpoints"])!=18:
         raise ValueError("Incomplete pre-SSP frozen BCC checkpoint gate")
+    row=get_model(manifest)
     torch.set_num_threads(1)
     out={"status":STATUS,"source_model":"BCC-CSM2-MR","source_member":"r1i1p1f1",
         "target_variable":"native_daily_mean_tas_K","year":2050,

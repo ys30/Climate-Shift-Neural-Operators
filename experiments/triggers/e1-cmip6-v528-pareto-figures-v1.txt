@@ -1,0 +1,1 @@
+E1 v5.28: render independently archived real v5.27 Pareto source from run 45951478573 into two figures, 42-row CSV and source-cautious manuscript Results. No future fitting, no climate data access.

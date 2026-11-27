@@ -1,0 +1,1 @@
+E1 v5.22: analyze successful v5.20 CAMS 91-day continuous SSP245/585 event-persistence gap, precision, recall and all 18 frozen checkpoint seed metrics; no refitting, no claim of 3-GCM replication.

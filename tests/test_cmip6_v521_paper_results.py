@@ -1,7 +1,7 @@
 """E1 v5.21: provenance-first figure validation, not inferential pooling."""
-import copy
+import csv
 import pytest
-from scripts.render_cmip6_v521_paper_results import audited,results_markdown
+from scripts.render_cmip6_v521_paper_results import audited,results_markdown,write_tables
 
 def fixture():
     rows=[]
@@ -39,3 +39,15 @@ def test_no_six_independent_model_claim():
     draft=results_markdown(audited(fixture()))
     assert "not six independent climate-model replications" in draft
     assert "heatwave persistence" in draft
+
+def test_export_full_v519_rows_with_additional_boolean_field(tmp_path):
+    d=fixture()
+    for row in d["gcm_ssp_findings"]:
+        row["fno1_beats_persistence_rmse"]=True
+    path=tmp_path/"manuscript.csv"
+    write_tables(audited(d),path)
+    with path.open(newline="",encoding="utf-8") as f:
+        rows=list(csv.DictReader(f))
+    assert len(rows)==6
+    assert "fno1_beats_persistence_rmse" not in rows[0]
+    assert {r["gcm"] for r in rows}=={"AWI","BCC","CAMS"}

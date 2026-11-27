@@ -24,7 +24,7 @@ MODELS=("fno","unet")
 WEIGHTS=(0,1,3)
 SEEDS=(11,22,33)
 
-def read_bcc_91(store,scenario,frozen):
+def read_bcc_91(store,scenario,frozen,year=2050):
     import fsspec,xarray as xr
     if scenario not in SSPS or f"/{scenario}/" not in store or "/day/tas/" not in store:
         raise ValueError("BCC source experiment mismatch")
@@ -45,7 +45,10 @@ def read_bcc_91(store,scenario,frozen):
         if cal not in ("noleap","365_day") or "days since" not in units:
             raise ValueError("BCC native noleap calendar required")
         time=np.asarray(t.values,dtype=float)
-        plan=dates();verify_dates(plan)
+        if year not in (2040,2050,2080):
+            raise ValueError("Only predeclared summer years 2040, 2050, 2080")
+        plan=[(year,m,d) for _,m,d in dates()]
+        verify_dates([(2050,m,d) for _,m,d in plan])
         positions=[]
         for year,month,day in plan:
             i,j,src,dst=exact_daily_pair_indices(time,(year,month,day),units,cal)
@@ -92,14 +95,14 @@ def score(pred,target,months,frozen):
         "bias_K":float(weighted["bias"]),"daily_p95_recall":hot["hot_recall"],
         "daily_p95_precision":hot["hot_precision"],**event}
 
-def evaluate(frozen,manifest):
+def evaluate(frozen,manifest,year=2050):
     import torch
     if len(frozen["checkpoints"])!=18:
         raise ValueError("Incomplete pre-SSP frozen BCC checkpoint gate")
     row=get_model(manifest)
     torch.set_num_threads(1)
     out={"status":STATUS,"source_model":"BCC-CSM2-MR","source_member":"r1i1p1f1",
-        "target_variable":"native_daily_mean_tas_K","year":2050,
+        "target_variable":"native_daily_mean_tas_K","year":year,
         "source_count_per_ssp":91,
         "event_definition":"same pixel >=3 consecutive days above BCC Historical train-only monthly local tas P95",
         "historical_npz_sha256":"a23260e8f14a23fb57483038bcd6ca03ba74c7944a48ba29d62bcc5bd354f452",
@@ -110,11 +113,11 @@ def evaluate(frozen,manifest):
            "Single BCC model member and single summer season; exploratory replication with CAMS",
            "Native noleap BCC daily mean tas, not tasmax or observed human heat exposure",
            "Summer boundary events censored; event-day spatial-temporal coincidence, not object tracking",
-           "2050 source-target dates continuous; no claims beyond 91 target days",
+           "Selected source-target dates continuous; no claims beyond 91 target days",
            "Fixed Historical-only P95 and normalization; no SSP model or threshold refit",
            "Scenario differences within a GCM are correlated, not independent climate models"]}
     for scenario in SSPS:
-        X,Y,months,meta=read_bcc_91(row[scenario]["store"],scenario,frozen)
+        X,Y,months,meta=read_bcc_91(row[scenario]["store"],scenario,frozen,year=year)
         base=score(X,Y,months,frozen)
         arms={}
         for name in MODELS:

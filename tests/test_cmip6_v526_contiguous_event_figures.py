@@ -28,6 +28,9 @@ def test_refit_prohibited():
     with pytest.raises(ValueError,match="complete v5.25"):verify(d)
 
 def test_generate_png_csv_and_results(tmp_path):
+    # matplotlib is an optional manuscript-figure dependency. The dedicated
+    # v5.26 workflow installs it and executes this test without skipping.
+    pytest.importorskip("matplotlib")
     out=tmp_path/"manuscript"
     render(verify(report()),out)
     assert len(list(out.glob("*.png")))==3

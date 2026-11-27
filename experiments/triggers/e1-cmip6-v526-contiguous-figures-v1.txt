@@ -1,0 +1,1 @@
+E1 v5.26: generate only provenance-verified three-GCM 2050 contiguous >=3-day native TAS P95 event-day Recall, RMSE-skill and loss-weight Precision tradeoff manuscript figures from successful frozen v5.25 run 45948547935. Do not fit or read future raw climate data.

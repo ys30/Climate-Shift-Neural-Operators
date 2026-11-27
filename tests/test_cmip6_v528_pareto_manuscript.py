@@ -32,5 +32,5 @@ def test_real_plot_schema_and_results(tmp_path):
     assert all(x.stat().st_size>6000 for x in out.glob("*.png"))
     with (out/"table_v528_original_42_candidate_metrics.csv").open() as f:
         assert len(list(csv.DictReader(f)))==42
-    assert "not a pre-registered model-selection result" in (out/"E1_v528_manuscript_Pareto_results.md").read_text()
+    assert "should not be interpreted as a pre-registered model-selection result" in (out/"E1_v528_manuscript_Pareto_results.md").read_text()
     with pytest.raises(FileExistsError):draw(data,out)

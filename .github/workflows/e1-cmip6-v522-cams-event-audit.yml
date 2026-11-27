@@ -1,0 +1,65 @@
+name: E1 v5.22 CAMS summer continuous event-day recall precision audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v522-cams-event-audit-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v522-CAMS-event-report
+  cancel-in-progress: false
+
+jobs:
+  event-pilot-results:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify event-day metrics and complete three-seed model arm tests
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v522_cams_contiguous_events.py
+      - name: Restore successful source-verified CAMS native contiguous 2050 pilot
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v520-CAMS-2050-contiguous-summer-daily-heat-events
+          run-id: 45914481554
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs
+      - name: Audit all frozen CAMS SSP experiment arms; create complete results tables
+        run: |
+          python -m scripts.audit_cmip6_v522_cams_contiguous_events \
+            --input inputs/e1_cmip6_v520_CAMS_2050_contiguous_summer.json \
+            --output-dir outputs/e1_v522_CAMS_contiguous_event_audit
+      - name: Verify two SSPs, all original seed metrics and explicit limits
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path("outputs/e1_v522_CAMS_contiguous_event_audit")
+          d=json.loads((p/"v522_contiguous_CAMS_event_tradeoff.json").read_text())
+          assert d["status"]=="v522_CAMS_contiguous_2050_summer_event_tradeoff_audit"
+          assert d["n_independent_GCMs"]==1 and d["n_SSP_scenarios"]==2
+          assert d["future_training_performed"] is False
+          assert len(d["scenario_findings"])==2 and len(d["arm_summaries"])==12
+          assert len(d["seed_metric_rows"])==252
+          assert set(x["scenario"] for x in d["scenario_findings"])=={"ssp245","ssp585"}
+          assert (p/"v522_CAMS_contiguous_event_results.md").is_file()
+          print("Contiguous CAMS event/precision/recall audit passed")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v522-CAMS-contiguous-2050-event-precision-recall-analysis
+          path: outputs/e1_v522_CAMS_contiguous_event_audit/
+          retention-days: 30
+          if-no-files-found: warn

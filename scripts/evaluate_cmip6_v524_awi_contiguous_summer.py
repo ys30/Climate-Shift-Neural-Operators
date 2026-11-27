@@ -81,7 +81,7 @@ def predict(frozen,name,weight,seed,X):
         out=np.concatenate([model(torch.from_numpy(b)).numpy()
              for b in np.array_split(xx,7)],axis=0)*frozen["train_std"]+frozen["train_mean"]
     if out.shape!=X.shape or not np.isfinite(out).all():
-        raise ValueError("Frozen BCC SSP forecast invalid")
+        raise ValueError("Frozen AWI SSP forecast invalid")
     return out
 
 def score(pred,target,months,frozen):
@@ -134,8 +134,8 @@ def main():
     for x in ("historical","arm-dir","manifest","output"):p.add_argument("--"+x,required=True)
     a=p.parse_args()
     output=Path(a.output)
-    if output.exists():raise FileExistsError("Do not overwrite BCC source evidence")
-    # Strictly verify all 18 BCC Historical-only checkpoints BEFORE any future SSP read.
+    if output.exists():raise FileExistsError("Do not overwrite AWI source evidence")
+    # Strictly verify all 18 AWI Historical-only checkpoints BEFORE any future SSP read.
     frozen=read_frozen_checkpoints(Path(a.arm_dir),Path(a.historical))
     r=evaluate(frozen,json.loads(Path(a.manifest).read_text()))
     output.parent.mkdir(parents=True,exist_ok=True)

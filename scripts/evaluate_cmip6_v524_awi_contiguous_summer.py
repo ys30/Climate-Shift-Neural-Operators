@@ -24,7 +24,7 @@ MODELS=("fno","unet")
 WEIGHTS=(0,1,3)
 SEEDS=(11,22,33)
 
-def read_awi_91(store,scenario,frozen):
+def read_awi_91(store,scenario,frozen,year=2050):
     import fsspec,xarray as xr
     if scenario not in SSPS or f"/{scenario}/" not in store or "/day/tas/" not in store:
         raise ValueError("AWI source experiment mismatch")
@@ -50,7 +50,10 @@ def read_awi_91(store,scenario,frozen):
         if cal!="proleptic_gregorian" or "days since" not in units:
             raise ValueError("AWI native proleptic Gregorian calendar required")
         time=np.asarray(t.values,dtype=float)
-        plan=dates();verify_dates(plan)
+        if year not in (2040,2050,2080):
+            raise ValueError("Only predeclared evaluation years 2040, 2050 and 2080")
+        plan=[(year,m,d) for _,m,d in dates()]
+        verify_dates([(2050,m,d) for _,m,d in plan])
         positions=[]
         for year,month,day in plan:
             i,j,src,dst=exact_daily_pair_indices(time,(year,month,day),units,cal)
@@ -89,24 +92,24 @@ def predict(frozen,name,weight,seed,X):
         raise ValueError("Frozen AWI SSP forecast invalid")
     return out
 
-def score(pred,target,months,frozen):
+def score(pred,target,months,frozen,year=2050):
     weighted=latitude_weighted_metrics(pred,target,frozen["latitude"])
     # AWI uses the same month-local P95 source but its original date-aware diagnostic.
-    times=np.array([np.datetime64(f"2050-{int(m):02d}-15") for m in months],dtype="datetime64[ns]")
+    times=np.array([np.datetime64(f"{year}-{int(m):02d}-15") for m in months],dtype="datetime64[ns]")
     hot=local_monthly_hot_diagnostics(pred,target,times,frozen["local_p95"],latitude=frozen["latitude"])
     event=event_stats(pred,target,months,frozen["local_p95"],frozen["latitude"])
     return {"rmse_K":float(weighted["rmse"]),"mae_K":float(weighted["mae"]),
         "bias_K":float(weighted["bias"]),"daily_p95_recall":hot["hot_recall"],
         "daily_p95_precision":hot["hot_precision"],**event}
 
-def evaluate(frozen,manifest):
+def evaluate(frozen,manifest,year=2050):
     import torch
     if len(frozen["models"])!=18:
         raise ValueError("Incomplete pre-SSP frozen AWI checkpoint gate")
     row=manifest_entry(manifest)
     torch.set_num_threads(1)
     out={"status":STATUS,"source_model":"AWI-CM-1-1-MR","source_member":"r1i1p1f1",
-        "target_variable":"native_daily_mean_tas_K","year":2050,
+        "target_variable":"native_daily_mean_tas_K","year":year,
         "source_count_per_ssp":91,
         "event_definition":"same pixel >=3 consecutive days above AWI Historical train-only monthly local tas P95",
         "historical_npz_sha256":REQUIRED_SHA,
@@ -117,17 +120,17 @@ def evaluate(frozen,manifest):
            "Single AWI model member and single summer season; exploratory replication with CAMS and BCC",
            "Native Gregorian AWI daily mean tas, not tasmax or observed human heat exposure",
            "Summer boundary events censored; event-day spatial-temporal coincidence, not object tracking",
-           "2050 source-target dates continuous; no claims beyond 91 target days",
+           "Selected source-target summer dates continuous; no claims beyond 91 target days",
            "Fixed Historical-only P95 and normalization; no SSP model or threshold refit",
            "Scenario differences within a GCM are correlated, not independent climate models"]}
     for scenario in SSPS:
-        X,Y,months,meta=read_awi_91(row[scenario]["store"],scenario,frozen)
-        base=score(X,Y,months,frozen)
+        X,Y,months,meta=read_awi_91(row[scenario]["store"],scenario,frozen,year=year)
+        base=score(X,Y,months,frozen,year=year)
         arms={}
         for name in MODELS:
             arms[name]={}
             for weight in WEIGHTS:
-                indiv=[score(predict(frozen,name,weight,seed,X),Y,months,frozen)
+                indiv=[score(predict(frozen,name,weight,seed,X),Y,months,frozen,year=year)
                        for seed in SEEDS]
                 arms[name][str(weight)]=summarize_seed_values(indiv)
         out["scenarios"][scenario]={"n_pairs":91,"source":meta,

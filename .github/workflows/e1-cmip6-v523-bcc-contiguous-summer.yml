@@ -1,0 +1,100 @@
+name: E1 v5.23 BCC Historical-frozen contiguous 2050 summer event replication
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v523-bcc-summer-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v523-BCC-native-contiguous-summer
+  cancel-in-progress: false
+
+jobs:
+  bcc-contiguous-events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test independent BCC historical-only frozen noleap event rule
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v523_bcc_contiguous_summer.py tests/test_cmip6_v520_cams_contiguous_summer.py tests/test_cmip6_bcc_v54_frozen_ssp.py
+      - name: Retrieve successfully verified BCC historical-only native cohort
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v51-bcc-historical-noleap-training-cohort
+          run-id: 45868844059
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/processed
+      - name: Retrieve BCC original 1x frozen Historical model arms
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-0
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_0
+      - name: Retrieve BCC original 2x frozen Historical model arms
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-1
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_1
+      - name: Retrieve BCC original 4x frozen Historical model arms
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-3
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_3
+      - name: SHA verify all 18 original BCC noleap Historical checkpoints before reading SSP
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.evaluate_cmip6_bcc_v54_frozen_ssp import inspect_frozen_sources
+          r=inspect_frozen_sources(Path("data/processed/e1_cmip6_v51_bcc_historical.npz"),Path("frozen"))
+          assert len(r["checkpoints"])==18 and r["p95"].shape==(12,23,23)
+          print("Verified eighteen original BCC checkpoints; zero SSP fitting")
+          PY
+      - name: Run two independent native SSP simulations, 91 consecutive +1-day summer predictions each
+        run: |
+          python -m scripts.evaluate_cmip6_v523_bcc_contiguous_summer \
+            --historical data/processed/e1_cmip6_v51_bcc_historical.npz \
+            --arm-dir frozen \
+            --manifest experiments/cmip6_v49_bcc_candidate_catalog.json \
+            --output outputs/e1_cmip6_v523_BCC_2050_contiguous_summer.json
+      - name: Audit 91-day two-SSP outputs, event metrics, source and checkpoint provenance
+        run: |
+          python - <<'PY'
+          import json,math
+          from scripts.evaluate_cmip6_v523_bcc_contiguous_summer import STATUS
+          d=json.load(open("outputs/e1_cmip6_v523_BCC_2050_contiguous_summer.json"))
+          assert d["status"]==STATUS and d["source_model"]=="BCC-CSM2-MR"
+          assert d["ssp_fitted"] is False and len(d["checkpoint_sha"])==18
+          assert set(d["scenarios"])=={"ssp245","ssp585"}
+          for v in d["scenarios"].values():
+            assert v["n_pairs"]==91 and v["source"]["n_bounded_regional_native_days_read"]==92
+            assert set(v["models"])=={"fno","unet"}
+            for model in ("fno","unet"):
+              assert set(v["models"][model])=={"0","1","3"}
+              for w,r in v["models"][model].items():
+                assert len(r["rmse_K"]["individual"])==3
+                assert math.isfinite(r["rmse_K"]["mean"])
+          print("BCC 2050 independent noleap contiguous SSP event pilot verified")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v523-BCC-2050-native-contiguous-summer-hot-event-forecast
+          path: outputs/e1_cmip6_v523_BCC_2050_contiguous_summer.json
+          retention-days: 30
+          if-no-files-found: warn

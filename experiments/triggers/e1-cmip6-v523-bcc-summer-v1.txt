@@ -1,1 +1,3 @@
 E1 v5.23 BCC-CSM2-MR original noleap independently trained 18 immutable checkpoints; 2050 summer 91 consecutive daily source-target pairs; both SSP245 and SSP585; exact CAMS >=3day historical-local-P95 event definition; no SSP fitting.
+
+Retry after fixing v5.23 fail-fast gate order: reject incomplete BCC checkpoint inventory before parsing a source catalog (first run 45927200424: 14 passed, 1 failed).

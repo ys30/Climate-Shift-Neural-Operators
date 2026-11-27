@@ -1,0 +1,1 @@
+E1 v5.33 source verified 3-GCM 2040/2050 original immutable 54 historical-only checkpoints from successful v5.32 run 46080073542; generate two manuscript figures, 12-cell table, English Results, include all exception cells, no future fitting or independence inflation.

@@ -26,8 +26,10 @@ YEAR=2050
 MONTHS=((6,30),(7,31),(8,30)) # August 31 source omitted; last target = August 31
 RUN_MIN=3
 
-def dates():
-    return [(YEAR,month,d) for month,last in MONTHS for d in range(1,last+1)]
+def dates(year=YEAR):
+    if year not in (2040,2050,2080):
+        raise ValueError("Only predeclared 2040/2050/2080 evaluation years")
+    return [(year,month,d) for month,last in MONTHS for d in range(1,last+1)]
 
 def verify_dates(rows):
     if len(rows)!=91 or len(set(rows))!=91:
@@ -84,7 +86,7 @@ def event_stats(pred,target,months,p95,lat):
       "reference":"CAMS historical-training local monthly tas P95, not future fitted",
     }
 
-def real_future_91(store,scenario,frozen):
+def real_future_91(store,scenario,frozen,year=YEAR):
     import fsspec
     import xarray as xr
     if scenario not in SSPS or f"/{scenario}/" not in store:
@@ -107,7 +109,7 @@ def real_future_91(store,scenario,frozen):
         if cal!=frozen["calendar"] or "days since" not in unit:
             raise ValueError("CAMS native calendar changed")
         numeric=np.asarray(time.values,dtype=float)
-        rows=dates()
+        rows=dates(year)
         verify_dates(rows)
         indices=[]
         for yr,month,day in rows:
@@ -190,13 +192,13 @@ def summarize_seed_values(entries):
                             "sd_seeds":float(np.std(v,ddof=1))}
     return output
 
-def evaluate(frozen,manifest):
+def evaluate(frozen,manifest,year=YEAR):
     import torch
     row=manifest_for_CAMS(manifest,frozen)
     torch.set_num_threads(1)
     out={"status":STATUS,"source_model":"CAMS-CSM1-0",
         "target_variable":"native_daily_mean_tas_K",
-        "year":YEAR,"target_months":[6,7,8],
+        "year":year,"target_months":[6,7,8],
         "source_count_per_ssp":91,
         "event_definition":"at least three consecutive daily mean tas targets above own historical local monthly P95",
         "ssp_fitted":False,
@@ -205,7 +207,7 @@ def evaluate(frozen,manifest):
                  for (name,w,s),v in frozen["checkpoints"].items()},
         "scenarios":{},
         "limits":[
-          "One 2050 contiguous June-August sampled calendar window, not multiple years",
+          "One selected-year contiguous June-August sampled calendar window, not multiple years",
           "Event-day recall compares same pixel AND same day, not objectively tracked heatwave systems",
           "Window-edge events are censored, and forecast target June 1 is not sampled",
           "Monthly local P95 is from Historical training only; no SSP thresholds fitted",
@@ -214,7 +216,7 @@ def evaluate(frozen,manifest):
           "This new continuous-date pilot was designed after earlier SSP results; exploratory"
         ]}
     for scenario in SSPS:
-        X,Y,months,meta=real_future_91(row[scenario]["store"],scenario,frozen)
+        X,Y,months,meta=real_future_91(row[scenario]["store"],scenario,frozen,year=year)
         baseline=metrics(X,Y,months,frozen)
         arms={}
         for model_name in MODELS:

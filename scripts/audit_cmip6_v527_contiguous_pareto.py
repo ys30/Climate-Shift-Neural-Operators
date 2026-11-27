@@ -76,10 +76,10 @@ def analyze(source):
                 who=[candidates[j]["model"]+("" if candidates[j]["loss_multiplier"] is None
                     else f"_{candidates[j]['loss_multiplier']}x") for j in range(len(candidates))
                      if j!=i and dominates(pts[j],pts[i])]
-                rows.append(dict(c,
+                rows.append({**c,
                   "pareto_nondominated":len(who)==0,
                   "dominated_by_count":len(who),
-                  "dominators":";".join(who)))
+                  "dominators":";".join(who)})
             selected=rows[-7:]
             grouped.append({"gcm":g,"scenario":s,
               "n_candidates":len(selected),"n_pareto":sum(r["pareto_nondominated"] for r in selected),

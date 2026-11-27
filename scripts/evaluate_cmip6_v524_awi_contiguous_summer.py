@@ -37,8 +37,13 @@ def read_awi_91(store,scenario,frozen):
         lat=np.asarray(ds["lat"].values,dtype=float)
         lon=np.asarray(ds["lon"].values,dtype=float)%360
         ilat=contiguous_span(lat,25,50);ilon=contiguous_span(lon,235,260)
-        if not np.array_equal(lat[ilat],frozen["latitude"]) or not np.array_equal(lon[ilon],frozen["lon"]):
-            raise ValueError("AWI SSP native geometry differs from frozen Historical")
+        # v4.5 Historical NPZ has latitude only; its same-artifact companion
+        # JSON holds historical regional longitude endpoints and NPZ SHA256.
+        if (not np.allclose(lat[ilat],frozen["latitude"],atol=1e-8,rtol=0)
+            or len(lon[ilon])!=27
+            or not np.allclose([lon[ilon][0],lon[ilon][-1]],
+                frozen["historical_lon_bounds"],atol=1e-8,rtol=0)):
+            raise ValueError("AWI SSP native geometry differs from Historical provenance")
         t=ds["time"]
         cal=str(t.attrs.get("calendar",t.encoding.get("calendar","standard")))
         units=str(t.attrs.get("units",""))
@@ -137,6 +142,21 @@ def main():
     if output.exists():raise FileExistsError("Do not overwrite AWI source evidence")
     # Strictly verify all 18 AWI Historical-only checkpoints BEFORE any future SSP read.
     frozen=read_frozen_checkpoints(Path(a.arm_dir),Path(a.historical))
+    # The original v4.5 Historical NPZ deliberately omits longitude arrays.
+    # Use SHA-linked original companion JSON rather than an invented lon key.
+    import hashlib
+    hist=Path(a.historical)
+    meta=json.loads(hist.with_suffix(".json").read_text())
+    npz_sha=hashlib.sha256(hist.read_bytes()).hexdigest()
+    if (meta.get("status")!="v45_historical_dense_sparsely_sampled_training_ready_no_model_training"
+        or meta.get("dataset_sha256")!=npz_sha
+        or meta.get("NPZ_contains_only_historical") is not True
+        or meta.get("ssp_test_data_read") is not False
+        or meta.get("region_grid_shape")!=[26,27]
+        or not np.allclose(meta.get("latitude_degrees",[]),frozen["latitude"],atol=1e-8,rtol=0)
+        or len(meta.get("longitude_east_bounds",[]))!=2):
+        raise ValueError("AWI Historical metadata and NPZ provenance mismatch")
+    frozen["historical_lon_bounds"]=meta["longitude_east_bounds"]
     r=evaluate(frozen,json.loads(Path(a.manifest).read_text()))
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(r,indent=2,allow_nan=False)+"\n")

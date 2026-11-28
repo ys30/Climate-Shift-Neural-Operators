@@ -1,0 +1,1 @@
+E1 v5.37 source-locked 3 independently simulated GCMs AWI/BCC/CAMS, 2040/2050 SSP245/585 original 54 frozen Historical-only checkpoints: audit 108 original Persistence/FNO1x/FNO4x 2/3/5-day duration results, 36 scenario-duration cells, matched three-day archived references; never treat as independent climate-model replication.

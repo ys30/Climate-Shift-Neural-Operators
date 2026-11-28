@@ -1,0 +1,109 @@
+name: E1 v5.36 CAMS native 2040 2050 frozen 2 3 5-day duration sensitivity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v536-cams-duration-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v536-CAMS-original-duration
+  cancel-in-progress: false
+
+jobs:
+  cams-duration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify CAMS historical frozen provenance and 2/3/5-day run-mask logic
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v536_cams_duration_sensitivity.py tests/test_cmip6_v534_awi_duration_sensitivity.py tests/test_cmip6_v531_cams_2040_holdout.py
+      - name: Restore original CAMS Historical-only regional source
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v516-cams-native-historical-only-training-data
+          run-id: 45900398047
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/cams
+      - name: Original CAMS 1x Historical frozen arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v517-cams-historical-frozen-weight-0
+          run-id: 45902275281
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_0
+      - name: Original CAMS 2x Historical frozen arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v517-cams-historical-frozen-weight-1
+          run-id: 45902275281
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_1
+      - name: Original CAMS 4x Historical frozen arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v517-cams-historical-frozen-weight-3
+          run-id: 45902275281
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_3
+      - name: Original CAMS 2040 three-day benchmark
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v531-CAMS-2040-contiguous-summer-temporal-holdout
+          run-id: 46054222652
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: reference/2040
+      - name: Original CAMS 2050 three-day benchmark
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v520-CAMS-2050-contiguous-summer-daily-heat-events
+          run-id: 45914481554
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: reference/2050
+      - name: Validate 18 original CAMS Historical-only frozen checkpoint SHA values before SSP data
+        run: |
+          python - <<'PY'
+          from scripts.evaluate_cmip6_v518_cams_frozen_ssp import inspect_frozen
+          f=inspect_frozen('data/cams/e1_cmip6_v516_cams_historical.npz',
+            'data/cams/e1_cmip6_v516_cams_historical.json','frozen')
+          assert len(f["checkpoints"])==18
+          print("Original CAMS Historical-only 18 checkpoint hashes validated")
+          PY
+      - name: Evaluate CAMS 2040 and 2050 native 2 3 5-day original frozen TAS event sensitivity
+        run: |
+          python -m scripts.evaluate_cmip6_v536_cams_duration_sensitivity \
+            --historical data/cams/e1_cmip6_v516_cams_historical.npz \
+            --metadata data/cams/e1_cmip6_v516_cams_historical.json \
+            --arm-dir frozen \
+            --reference-2040 reference/2040/e1_cmip6_v531_CAMS_2040_contiguous_summer.json \
+            --reference-2050 reference/2050/e1_cmip6_v520_CAMS_2050_contiguous_summer.json \
+            --output outputs/e1_cmip6_v536_CAMS_two_year_duration_sensitivity.json
+      - name: Enforce all 3-day archived Recall Precision reproduced and 36 full records
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open("outputs/e1_cmip6_v536_CAMS_two_year_duration_sensitivity.json"))
+          assert d["status"]=="v536_CAMS_2040_2050_original_frozen_2_3_5_day_event_sensitivity"
+          assert d["all_original_three_day_reference_scores_reproduced"] is True
+          assert d["ssp_fitted"] is False and d["independent_GCM_count"]==1
+          assert d["n_original_frozen_checkpoints"]==18 and len(d["records"])==36
+          assert {z["min_days"] for z in d["records"]}=={2,3,5}
+          print("CAMS original frozen 2/3/5-day event sensitivity and three-day replication passed")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v536-CAMS-two-year-2-3-5-day-event-duration-sensitivity
+          path: outputs/e1_cmip6_v536_CAMS_two_year_duration_sensitivity.json
+          retention-days: 30
+          if-no-files-found: warn

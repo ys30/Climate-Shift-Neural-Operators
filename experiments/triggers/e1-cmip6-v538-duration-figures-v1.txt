@@ -1,0 +1,1 @@
+E1 v5.38 render all original three-GCM 2040/2050 2/3/5-day frozen-source duration comparisons from verified v5.37 run 46117981473. Plot 12 paired Recall gap, FNO 4x gain and Precision cost trajectories and explicitly count sign of 5-day minus 2-day changes; no invented monotonicity or independence.

@@ -1,0 +1,1 @@
+E1 v5.34: original AWI 18 SHA verified historical frozen checkpoints; 2040 and 2050 summers SSP245/585 with event min duration 2 3 5 days, original 3-day AWI archived reference must be exactly reproduced in Recall Precision before new results accepted. One GCM only; no SSP refitting.

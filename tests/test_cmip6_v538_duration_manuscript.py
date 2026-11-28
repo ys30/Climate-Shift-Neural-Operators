@@ -29,9 +29,12 @@ def test_render_counterdirection_and_full_report(tmp_path):
     row=next(x for x in r["scenario_duration_findings"] if (x["gcm"],x["year"],x["scenario"],x["min_days"])==("AWI",2040,"ssp245",5))
     row["fno_1x_event_recall"]+=.02
     row["persistence_minus_fno_1x_recall_pp"]-=2.
+    row["fno_4x_minus_1x_recall_pp"]-=2.
     pair=next(x for x in r["paired_two_vs_five_day_changes"] if (x["gcm"],x["year"],x["scenario"])==("AWI",2040,"ssp245"))
     pair["recall_gap_5day_pp"]-=2.
     pair["five_minus_two_day_gap_change_pp"]-=2.
+    pair["fno_4x_gain_5day_pp"]-=2.
+    pair["five_minus_two_day_hotweight_gain_change_pp"]-=2.
     rows,pairs=validate(r)
     out=tmp_path/"paper"
     summary=render(rows,pairs,out)

@@ -1,0 +1,112 @@
+name: E1 v5.40 AWI frozen native high-TAS episode-object diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v540-awi-episode-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v540-AWI-episodes
+  cancel-in-progress: false
+
+jobs:
+  awi-episodes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 105
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify one-to-one episode matches, splits, censoring, and original three-day event scores
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v540_awi_episode_objects.py tests/test_cmip6_v534_awi_duration_sensitivity.py tests/test_cmip6_v529_awi_2040_holdout.py
+      - name: Restore original AWI Historical-only regional training data
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v45-awi-historical-only-training-data
+          run-id: 45857281051
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/processed
+      - name: Retrieve original 1x AWI frozen Historical checkpoint arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-0
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_0
+      - name: Retrieve original 2x AWI frozen Historical checkpoint arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-1
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_1
+      - name: Retrieve original 4x AWI frozen Historical checkpoint arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-3
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_3
+      - name: Restore original AWI 2040 three-day event-day references
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v529-AWI-2040-new-temporal-holdout-contiguous-summer
+          run-id: 45954950987
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: reference/2040
+      - name: Restore original AWI 2050 three-day event-day references
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v524-AWI-2050-native-contiguous-summer-hot-event-forecast
+          run-id: 45937473743
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: reference/2050
+      - name: Verify 18 original immutable Historical-only frozen checkpoint hashes
+        run: |
+          python - <<'PY'
+          from scripts.evaluate_cmip6_v529_awi_2040_contiguous_holdout import verified_frozen
+          f=verified_frozen('data/processed/e1_cmip6_v45_awi_historical.npz','frozen')
+          assert len(f['models'])==18 and len(f['checkpoint_sha256_by_arm'])==18
+          print('Original AWI frozen provenance verified before future data reads')
+          PY
+      - name: Evaluate native 2040/2050 same-pixel hot episode matching and fragmentation
+        run: |
+          python -m scripts.evaluate_cmip6_v540_awi_episode_objects \
+            --historical data/processed/e1_cmip6_v45_awi_historical.npz \
+            --arm-dir frozen \
+            --manifest experiments/cmip6_v40_first_two_catalog_triples.json \
+            --reference-2040 reference/2040/e1_cmip6_v529_AWI_2040_contiguous_summer.json \
+            --reference-2050 reference/2050/e1_cmip6_v524_AWI_2050_contiguous_summer.json \
+            --output outputs/e1_cmip6_v540_AWI_two_year_episode_diagnostics.json
+      - name: Confirm original 3-day event-day scores unchanged and 28 episode records
+        run: |
+          python - <<'PY'
+          import json,math
+          d=json.load(open('outputs/e1_cmip6_v540_AWI_two_year_episode_diagnostics.json'))
+          assert d['status']=='v540_AWI_2040_2050_frozen_same_pixel_episode_matching'
+          assert d['three_day_reference_reproduced'] is True and d['ssp_fitted'] is False
+          assert d['independent_GCM_count']==1 and d['original_frozen_checkpoint_count']==18
+          assert len(d['records'])==28
+          assert {(r['year'],r['scenario']) for r in d['records']}=={
+            (y,s) for y in (2040,2050) for s in ('ssp245','ssp585')}
+          assert all(r['episode_recall'] is None or 0<=r['episode_recall']<=1 for r in d['records'])
+          assert all(r['episode_precision'] is None or 0<=r['episode_precision']<=1 for r in d['records'])
+          assert all(r['area_weighted_matched_interior_episodes']<=r['area_weighted_matched_episodes']+1e-6 for r in d['records'])
+          print('AWI 28 original frozen episode diagnostic records verified')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v540-AWI-frozen-two-year-matched-episode-diagnostics
+          path: outputs/e1_cmip6_v540_AWI_two_year_episode_diagnostics.json
+          retention-days: 30
+          if-no-files-found: warn

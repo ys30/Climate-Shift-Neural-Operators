@@ -1,0 +1,111 @@
+name: E1 v5.35 BCC frozen two-year 2 3 5-day event-duration sensitivity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v535-bcc-duration-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v535-BCC-duration
+  cancel-in-progress: false
+
+jobs:
+  bcc-duration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test exact run masks and SHA-protected BCC 2040 and 2050 historical checkpoint contracts
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v535_bcc_duration_sensitivity.py tests/test_cmip6_v534_awi_duration_sensitivity.py tests/test_cmip6_v530_bcc_2040_holdout.py
+      - name: Restore original BCC Historical noleap native cohort
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v51-bcc-historical-noleap-training-cohort
+          run-id: 45868844059
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/processed
+      - name: Original frozen BCC 1x Historical arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-0
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_0
+      - name: Original frozen BCC 2x Historical arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-1
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_1
+      - name: Original frozen BCC 4x Historical arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v53-bcc-frozen-historical-weight-3
+          run-id: 45870654954
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_3
+      - name: Original independent BCC 2040 3-day event benchmark
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v530-BCC-2040-independent-temporal-holdout
+          run-id: 45956507929
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: reference/2040
+      - name: Original independent BCC 2050 3-day event benchmark
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v523-BCC-2050-native-contiguous-summer-hot-event-forecast
+          run-id: 45928444026
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: reference/2050
+      - name: Verify all original BCC Historical checkpoint hashes before evaluating SSP
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.evaluate_cmip6_bcc_v54_frozen_ssp import inspect_frozen_sources
+          f=inspect_frozen_sources(Path("data/processed/e1_cmip6_v51_bcc_historical.npz"),Path("frozen"))
+          assert len(f["checkpoints"])==18 and len(f["checkpoint_sha_by_model"])==18
+          assert f["p95"].shape==(12,23,23)
+          print("18 original BCC frozen checkpoints verified; no future data used for fitting")
+          PY
+      - name: Evaluate original native BCC SSP 2040 and 2050 2 3 5-day event definition
+        run: |
+          python -m scripts.evaluate_cmip6_v535_bcc_duration_sensitivity \
+            --historical data/processed/e1_cmip6_v51_bcc_historical.npz \
+            --arm-dir frozen \
+            --manifest experiments/cmip6_v49_bcc_candidate_catalog.json \
+            --reference-2040 reference/2040/e1_cmip6_v530_BCC_2040_contiguous_summer.json \
+            --reference-2050 reference/2050/e1_cmip6_v523_BCC_2050_contiguous_summer.json \
+            --output outputs/e1_cmip6_v535_BCC_two_year_duration_sensitivity.json
+      - name: Validate exact original 3-day BCC benchmark replication and 36 results
+        run: |
+          python - <<'PY'
+          import json
+          p="outputs/e1_cmip6_v535_BCC_two_year_duration_sensitivity.json"
+          r=json.load(open(p))
+          assert r["status"]=="v535_BCC_2040_2050_original_frozen_two_three_five_day_event_sensitivity"
+          assert r["all_original_three_day_reference_scores_reproduced"] is True
+          assert r["independent_GCM_count"]==1 and r["ssp_fitted"] is False
+          assert r["n_original_frozen_checkpoints"]==18 and len(r["records"])==36
+          assert {z["min_days"] for z in r["records"]}=={2,3,5}
+          print("BCC duration sensitivity evidence and frozen source provenance successful")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v535-BCC-two-year-2-3-5-day-event-duration-sensitivity
+          path: outputs/e1_cmip6_v535_BCC_two_year_duration_sensitivity.json
+          retention-days: 30
+          if-no-files-found: warn

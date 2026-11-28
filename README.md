@@ -4,7 +4,16 @@
 
 Working question: **Do neural operators generalize to a warmer climate?** This project evaluates out-of-distribution performance under temporal, geographic, and climate-state shifts, focusing on extreme-event fidelity and physical consistency.
 
-> Status: **research design / repository initialization**. No model results, climate-change projections, or validation claims have been established yet.
+> Status: **CMIP6 E1 historical-only frozen-model experiments and multi-GCM evaluation completed through v5.38**. These are reproducible model-to-model comparisons on simulated daily-mean TAS, not observed heatwave/heat-health forecasts or independent climate projections. Earlier sections below document historical development stages and may be superseded by the latest verified evidence.
+
+## Latest verified evidence (E1 v5.32–v5.39)
+
+- **Three independent CMIP6 GCM members** (AWI, BCC and CAMS); two evaluation years (2040, 2050) and two correlated SSPs per GCM; original 54 Historical-only frozen neural checkpoints verified across evaluation years. [v5.32 successful paired-year audit](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/46080073542).
+- **Average RMSE versus sustained-event detection:** standard FNO reduced next-day area-weighted daily-mean TAS RMSE versus Persistence in 12/12 GCM×year×SSP cases, but had lower native-grid ≥3-day hot-event-day Recall in 12/12. Strong 4× Historical tail upweighting improved FNO Recall in 12/12, decreased Precision in 11/12, and increased RMSE in only 6/12. [v5.33 source-verified figures](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/46084222081).
+- **Duration sensitivity:** at each of ≥2/3/5 days, Persistence Recall exceeded standard FNO in 12/12 cases, and strong-tail FNO Recall exceeded standard FNO in 12/12. For the same 12 correlated GCM×year×SSP comparisons, the Persistence-minus-FNO Recall gap was larger with ≥5 rather than ≥2 days in **12/12**; strong-tail Recall gains grew in **9/12** and decreased in **3/12**. [v5.38 verified manuscript figures and paired CSV](https://github.com/ys30/Climate-Shift-Neural-Operators/actions/runs/46119929189).
+- **Limits:** only three independent GCM members; years and SSPs correlated within GCM. These are same-grid-cell *event-day* overlap diagnostics against each GCM's fixed Historical monthly local TAS P95, not tracked heatwave episodes, observed temperatures, `tasmax`, or heat-exposure prediction. Two-/five-day sensitivity was performed after examining earlier three-day results. No pseudo-replicated significance claim.
+
+See [**v5.39 paper-facing Results text and complete evidence chain**](docs/E1_V539_MANUSCRIPT_EVIDENCE_SYNTHESIS.md) for source run links, uncertainty limitations and the next event-object analysis. The sections below retain the evolving experiment history; the v5.39 synthesis is the most current verified evidence.
 
 ## Core questions
 

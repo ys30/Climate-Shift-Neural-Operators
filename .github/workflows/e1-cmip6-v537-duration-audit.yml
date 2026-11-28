@@ -1,0 +1,84 @@
+name: E1 v5.37 three-GCM 2 3 5-day event-duration sensitivity audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v537-duration-audit-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v537-three-GCM-duration
+  cancel-in-progress: false
+
+jobs:
+  three-gcm-duration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test 108 original duration rows and 3-independent-GCM provenance
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_cmip6_v537_three_gcm_duration_sensitivity.py
+      - name: Restore successful original AWI duration sensitivity
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v534-AWI-two-year-2-3-5-day-event-duration-sensitivity
+          run-id: 46109631398
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/awi
+      - name: Restore successful original BCC duration sensitivity
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v535-BCC-two-year-2-3-5-day-event-duration-sensitivity
+          run-id: 46117110466
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/bcc
+      - name: Restore successful original CAMS duration sensitivity
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v536-CAMS-two-year-2-3-5-day-event-duration-sensitivity
+          run-id: 46117486346
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs/cams
+      - name: Run three independently sourced native GCM event duration sensitivity
+        run: |
+          python -m scripts.audit_cmip6_v537_three_gcm_duration_sensitivity \
+            --awi inputs/awi/e1_cmip6_v534_AWI_two_year_duration_sensitivity.json \
+            --bcc inputs/bcc/e1_cmip6_v535_BCC_two_year_duration_sensitivity.json \
+            --cams inputs/cams/e1_cmip6_v536_CAMS_two_year_duration_sensitivity.json \
+            --output-dir outputs/e1_v537_three_GCM_duration
+      - name: Verify 36 complete duration cases and 108 unpooled source rows
+        run: |
+          python - <<'PY'
+          import json,csv
+          from pathlib import Path
+          d=Path("outputs/e1_v537_three_GCM_duration")
+          r=json.loads((d/"v537_three_GCM_duration_audit.json").read_text())
+          assert r["independent_GCM_count"]==3
+          assert r["GCM_year_SSP_cells"]==12
+          assert r["GCM_year_SSP_duration_cells"]==36
+          assert r["original_frozen_checkpoints"]==54
+          assert r["original_GCM_duration_arm_rows"]==108
+          assert r["all_three_day_archived_references_reproduced"] is True
+          assert r["no_SSP_fitting"] is True
+          assert all(v["valid_scenarios"]==12 for v in r["duration_counts"].values())
+          with (d/"v537_108_original_model_duration_rows.csv").open() as f:
+            assert len(list(csv.DictReader(f)))==108
+          print(json.dumps(r["duration_counts"],indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v537-three-GCM-two-year-2-3-5-day-duration-audit
+          path: outputs/e1_v537_three_GCM_duration/
+          retention-days: 30
+          if-no-files-found: warn

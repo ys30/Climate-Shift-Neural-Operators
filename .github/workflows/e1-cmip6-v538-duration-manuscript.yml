@@ -1,0 +1,72 @@
+name: E1 v5.38 three-GCM paired 2-3-5d manuscript figures
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v538-duration-figures-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v538-paired-duration
+  cancel-in-progress: false
+
+jobs:
+  duration-figures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify source-gated three-GCM and all signed 5d minus 2d duration comparisons
+        run: |
+          python -m pip install pytest matplotlib numpy
+          python -m pytest tests/test_cmip6_v538_duration_manuscript.py
+      - name: Download source-locked successfully validated v5.37 duration audit
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v537-three-GCM-two-year-2-3-5-day-duration-audit
+          run-id: 46117981473
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: inputs
+      - name: Render verified 3-GCM per-case 2-3-5d Recall Precision and paired duration differences
+        run: |
+          python -m scripts.render_cmip6_v538_duration_manuscript \
+            --input inputs/v537_three_GCM_duration_audit.json \
+            --output-dir outputs/e1_v538_duration_paper
+      - name: Check complete figures, signed paired comparisons and uncertainty caveats
+        run: |
+          python - <<'PY'
+          import json,csv
+          from pathlib import Path
+          p=Path("outputs/e1_v538_duration_paper")
+          figures=list(p.glob("figure_v538_*.png"))
+          assert len(figures)==3 and all(f.stat().st_size>8000 for f in figures)
+          with (p/"table_v538_36_original_duration_cases.csv").open() as f:
+            rows=list(csv.DictReader(f))
+          assert len(rows)==36 and {(r["gcm"],r["year"],r["scenario"],r["min_days"]) for r in rows}=={
+            (g,str(y),s,str(d)) for g in ("AWI","BCC","CAMS") for y in (2040,2050)
+            for s in ("ssp245","ssp585") for d in (2,3,5)}
+          with (p/"table_v538_12_paired_duration_changes.csv").open() as f:
+            assert len(list(csv.DictReader(f)))==12
+          r=json.loads((p/"v538_paired_duration_direction_counts.json").read_text())
+          assert r["original_independent_GCM_members"]==3 and r["paired_two_five_day_scenarios"]==12
+          assert r["no_SSP_training_or_model_selection"] is True
+          for k in ("persistence_minus_FNO_recall_gap_5d_minus_2d","FNO_4x_gain_5d_minus_2d"):
+            v=r[k]
+            assert sum(v[z] for z in ("positive","negative","unchanged","undefined"))==12
+          print(json.dumps(r,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v538-three-GCM-two-year-duration-manuscript-figures
+          path: outputs/e1_v538_duration_paper/
+          retention-days: 30
+          if-no-files-found: warn

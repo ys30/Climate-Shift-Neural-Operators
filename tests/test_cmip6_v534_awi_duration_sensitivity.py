@@ -14,7 +14,9 @@ def test_duration_two_three_five_distinct():
     p[13,0,0,0]=295.
     months=np.full(91,6,dtype=int)
     a={n:event(p,y,months,p95,np.array([35.,40.]),n) for n in DURATIONS}
-    assert a[2]["event_day_recall"]<a[3]["event_day_recall"]
+    assert a[2]["event_day_recall"]==pytest.approx(5/6)
+    assert a[3]["event_day_recall"]==pytest.approx(3/4)
+    assert a[2]["event_day_recall"]>a[3]["event_day_recall"]
     assert a[5]["event_day_recall"] is None
     assert a[5]["observed_event_day_area_weight"]==0.
 

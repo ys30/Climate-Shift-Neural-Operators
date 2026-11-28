@@ -47,7 +47,6 @@ def match_one_pixel(truth,pred,n_days=91):
         if i not in observed_used and j not in forecast_used:
             pairs.append((i,j,overlap))
             observed_used.add(i);forecast_used.add(j)
-    fragmentation=sum(sum(1 for _,k,_,_ in links if _!=None and k==i)>1 for i in range(len(truth))) if False else 0
     # Fragmentation is count of true episodes overlapped by >=2 distinct forecast episodes.
     per_truth={i:set() for i in range(len(truth))}
     for _,i,j,_lag in links:per_truth[i].add(j)

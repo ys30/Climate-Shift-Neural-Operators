@@ -1,0 +1,110 @@
+name: E1 v5.34 AWI frozen 2040 2050 event-duration sensitivity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/triggers/e1-cmip6-v534-awi-duration-v1.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: e1-cmip6-v534-AWI-duration
+  cancel-in-progress: false
+
+jobs:
+  awi-duration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify 2/3/5 day run-event definitions and archived 3-day score protections
+        run: |
+          python -m pip install -e '.[test,torch,era5]'
+          python -m pytest tests/test_cmip6_v534_awi_duration_sensitivity.py tests/test_cmip6_v529_awi_2040_holdout.py tests/test_cmip6_v524_awi_contiguous_summer.py
+      - name: Restore original AWI Historical source and regional geometry provenance
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v45-awi-historical-only-training-data
+          run-id: 45857281051
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: data/processed
+      - name: Original frozen AWI 1x Historical checkpoint arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-0
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_0
+      - name: Original frozen AWI 2x Historical checkpoint arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-1
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_1
+      - name: Original frozen AWI 4x Historical checkpoint arm
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-cmip6-v47-historical-weight-3
+          run-id: 45861178303
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frozen/weight_3
+      - name: AWI 2040 independent temporal reference scores
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v529-AWI-2040-new-temporal-holdout-contiguous-summer
+          run-id: 45954950987
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: reference/2040
+      - name: AWI 2050 independent original 3-day reference scores
+        uses: actions/download-artifact@v4
+        with:
+          name: e1-v524-AWI-2050-native-contiguous-summer-hot-event-forecast
+          run-id: 45937473743
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: reference/2050
+      - name: Verify all frozen Historical-only AWI checkpoints before SSP reads
+        run: |
+          python - <<'PY'
+          from scripts.evaluate_cmip6_v529_awi_2040_contiguous_holdout import verified_frozen
+          x=verified_frozen("data/processed/e1_cmip6_v45_awi_historical.npz","frozen")
+          assert len(x["models"])==18 and len(x["checkpoint_sha256_by_arm"])==18
+          print("18 original SHA-audited AWI checkpoints verified without future SSP data")
+          PY
+      - name: Evaluate 2040 and 2050 SSP245 and SSP585 2/3/5-day event sensitivity
+        run: |
+          python -m scripts.evaluate_cmip6_v534_awi_duration_sensitivity \
+            --historical data/processed/e1_cmip6_v45_awi_historical.npz \
+            --arm-dir frozen \
+            --manifest experiments/cmip6_v40_first_two_catalog_triples.json \
+            --reference-2040 reference/2040/e1_cmip6_v529_AWI_2040_contiguous_summer.json \
+            --reference-2050 reference/2050/e1_cmip6_v524_AWI_2050_contiguous_summer.json \
+            --output outputs/e1_cmip6_v534_AWI_two_year_duration_sensitivity.json
+      - name: Confirm all four reference 3-day scores reproduced and full 36 metric rows
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open("outputs/e1_cmip6_v534_AWI_two_year_duration_sensitivity.json"))
+          assert d["status"]=="v534_AWI_2040_2050_two_three_five_day_original_frozen_sensitivity"
+          assert d["all_original_three_day_reference_scores_reproduced"] is True
+          assert d["n_original_frozen_checkpoints"]==18 and d["ssp_fitted"] is False
+          assert d["independent_GCM_count"]==1 and len(d["records"])==36
+          assert {r["min_days"] for r in d["records"]}=={2,3,5}
+          assert {(r["year"],r["scenario"]) for r in d["records"]}=={
+            (y,s) for y in (2040,2050) for s in ("ssp245","ssp585")}
+          print("AWI 2/3/5-day event sensitivity and original 3-day archive exact-reproduction gate verified")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-v534-AWI-two-year-2-3-5-day-event-duration-sensitivity
+          path: outputs/e1_cmip6_v534_AWI_two_year_duration_sensitivity.json
+          retention-days: 30
+          if-no-files-found: warn

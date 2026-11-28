@@ -1,0 +1,7 @@
+# E1 v5.37 — three independent GCM duration sensitivity audit
+
+Direct inputs: frozen-source AWI v5.34 GitHub Actions run 46109631398, BCC v5.35 run 46117110466 and CAMS v5.36 run 46117486346. Each original GCM archive must include 18 Historical-only checkpoint hashes, no future SSP training, all 36 GCM-specific rows, and an explicit successful original three-day archive reproduction gate.
+
+For each GCM, two evaluation years (2040, 2050), two SSPs (245, 585), durations of at least 2, 3 or 5 same-pixel consecutive historical-local monthly P95 exceedance days, compare persistence and FNO 1x/4x event-day Recall/Precision. 3 GCM × 2 years × 2 SSP × 3 durations = 36 correlated duration cases; 3 models each = 108 source rows. Compare paired 5d−2d change of Persistence−FNO 1× Recall percentage-point gap and FNO 4×−1× Recall advantage. Durations modify qualifying observed event-day denominators; the observed event-day membership should never increase as duration threshold increases.
+
+Explicitly preserve exceptions, null event-day rates, and differing native grid sizes. Do not report monotonic increases of Recall deficits without confirming signed paired 5−2-day comparisons. The three original GCM members, not 36 cells, form the independent climate-model replication units. These are exploratory post-hoc duration checks on simulated daily mean TAS, not observed tasmax, event-object tracking, or formal inferential statistics.

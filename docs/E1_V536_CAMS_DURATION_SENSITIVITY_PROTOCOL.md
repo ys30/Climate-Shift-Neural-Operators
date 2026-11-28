@@ -1,0 +1,5 @@
+# E1 v5.36 — CAMS native 2040 and 2050 sustained hot-event duration sensitivity
+
+Complete original frozen CAMS-CSM1-0 historical-only training source and 18 SHA-verified checkpoints, original Historical training monthly-local P95, exactly native grid and native daily mean Kelvin TAS sources for SSP245/SSP585, 91 consecutive summer source-target pairs in both 2040 and 2050. Keep every original 3-day Persistence and 3-seed FNO 1×/4× event-day Recall and Precision within strict numerical tolerance of immutable original v5.31 (2040) and v5.20 (2050) artifacts before accepting new 2 and 5-day sensitivity. No new fitting or checkpoint selection from SSP.
+
+For 2, 3 and 5 consecutive days above historical month-local pixel P95: identify every day of runs satisfying minimum duration, score same-pixel same-day spatially weighted event-day overlap, including possible undefined event rates. Do not claim object/event tracking. Edge censoring remains. This is only one GCM with two correlated years × two correlated SSP pathways and the 2/5-day definitions are post-exploratory sensitivity, not a new independent GCM experiment or pre-registered confirmation.

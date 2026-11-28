@@ -1,0 +1,1 @@
+E1 v5.36 CAMS 2040/2050 duration 2/3/5-day native historical-only 18 SHA-frozen checkpoint sensitivity, both SSP245/585, strict original 3-day archived Recall/Precision replication before accepting 36 rows; no future fitting.

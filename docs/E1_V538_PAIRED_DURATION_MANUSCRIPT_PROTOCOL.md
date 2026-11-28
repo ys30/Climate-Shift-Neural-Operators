@@ -1,0 +1,5 @@
+# E1 v5.38 — 3-GCM paired 2/3/5-day duration manuscript results
+
+Reads *only* the successfully archived E1 v5.37 source (Actions run 46117981473), with 54 original Historical-only frozen checkpoints and all 3-day reference metrics reproduced. 3 independent native CMIP6 GCM members, each two years (2040, 2050) × two correlated SSP pathways (245,585), 12 original GCM-year-SSP cells, 36 threshold cases, 108 source model rows.
+
+Produce three per-scenario 2/3/5-day native-grid event-day plots: Persistence−standard FNO Recall gap (pp), strong 4×−1× FNO Recall gain (pp), and 4×−1× Precision change (pp). Explicit 12-row paired 5d−2d difference table, honest direction counts: positive, negative, unchanged, undefined, rather than assuming that 12/12 sign consistency implies monotonic growing gap. Validate archived paired effects and all original scores against source before rendering. All exploratory, no independent GCM significance, no SSP fitting, not event-object tracking, no claims of observed tasmax hazard.
